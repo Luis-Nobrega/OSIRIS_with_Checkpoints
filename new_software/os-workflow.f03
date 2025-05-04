@@ -1,6 +1,9 @@
 module m_workflow  
     implicit none 
 
+    private
+    public :: file_exists  ! Explicitly make it available
+
     character(len=*), parameter :: steering_filename = 'steering_input_deck'
    
 contains      
