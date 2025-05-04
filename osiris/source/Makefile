@@ -42,7 +42,7 @@ include system/Makefile
 # FFT library code.
 include fft/Makefile
 
-src +=  os-param.f90 os-units.f90 os-math.f90 os-input-file.f03 os-util.f90
+src +=  os-param.f90 os-units.f90 os-math.f90 os-input-file.f03 os-util.f90 os-workflow.f03 # !*!
 
 include memory/Makefile
 
@@ -56,7 +56,7 @@ src +=  os-logprof.f90  os-nconf.f03  os-fparser.f90  \
         os-space.f90    os-tstep.f90  os-time.f90
 
 # Add workflow utilities here 
-src += os-workflow.f03 # !*!
+#src += os-workflow.f03 # !*!
 
 include grid/Makefile
 

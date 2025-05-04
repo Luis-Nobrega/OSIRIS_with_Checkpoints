@@ -227,11 +227,12 @@ subroutine run_sim( sim )
     print *, ''
   endif
 
+  call check_file_exists(file_ok) !*!
+
   ! synchronize all nodes
   DEBUG("Sychronizing nodes before main simulation loop")
   call sim%no_co % barrier()
   
-  file_ok = file_exists()
 
   do
     ! check if profiling should be added
