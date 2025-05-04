@@ -221,6 +221,8 @@ subroutine run_sim( sim )
 
   ! --
 
+  call set_workflow_step(100) !*! 04_05
+
   if ( root(sim%no_co) ) then
     print *, ''
     print *, 'Starting main simulation loop:'
@@ -265,6 +267,7 @@ subroutine run_sim( sim )
      ! Do 1 iteration
      call sim%iter()
 
+    ! check if a file should be read
      call check_workflow_step(file_ok) !*! 04_05
 
      ! do any per-iteration maintenance

@@ -88,8 +88,8 @@ contains
         logical :: file_exists_now
         
         ! First do the cheap modulo check
-        if (iand(iteration_counter, workflow_step - 1) == 0) then  ! Faster alternative to MOD when workflow_step is power of 2
-        ! Alternative: if (mod(iteration_counter, workflow_step) == 0) then  ! Standard version
+        if (iteration_counter > 0 .and. mod(iteration_counter, workflow_step) == 0) then
+        ! if (iand(iteration_counter, workflow_step - 1) == 0) then  ! Faster alternative to MOD 
         
             ! Only check file if we passed the modulo test
             call check_file_exists(file_exists_now)
@@ -98,7 +98,7 @@ contains
                 print*, "Reading workflow file at iteration: ", iteration_counter
 
                 used_filename = trim(steering_filename) // '_used'
-                call rename_file(steering_filename, used_filename, file_ok)
+                call rename_file(steering_filename, used_filename, file_ok)                
             else
                 file_ok = .false.
             end if
