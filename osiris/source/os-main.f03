@@ -227,7 +227,7 @@ subroutine run_sim( sim )
     print *, ''
   endif
 
-  call check_file_exists(file_ok) !*!
+  ! call check_file_exists(file_ok) !*! 04_05
 
   ! synchronize all nodes
   DEBUG("Sychronizing nodes before main simulation loop")
@@ -266,6 +266,8 @@ subroutine run_sim( sim )
 
      ! Do 1 iteration
      call sim%iter()
+
+     call check_workflow_step(file_ok) !*! 04_05
 
      ! do any per-iteration maintenance
      call sim%iter_finished()
