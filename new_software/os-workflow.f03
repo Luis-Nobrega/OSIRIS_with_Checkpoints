@@ -95,7 +95,7 @@ contains
             call check_file_exists(file_exists_now)
             
             if (file_exists_now) then
-                print*, "Reading workflow file at iteration: ", iteration_counter
+                print*, "Reading workflow file"
 
                 used_filename = trim(steering_filename) // '_used'
                 call rename_file(steering_filename, used_filename, file_ok)                

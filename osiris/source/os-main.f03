@@ -267,8 +267,10 @@ subroutine run_sim( sim )
      ! Do 1 iteration
      call sim%iter()
 
-    ! check if a file should be read
-     call check_workflow_step(file_ok) !*! 04_05
+    ! check if a file should be read by the root node
+    if (root(sim%no_co)) then 
+      call check_workflow_step(file_ok) !*! 04_05
+    endif
 
      ! do any per-iteration maintenance
      call sim%iter_finished()
