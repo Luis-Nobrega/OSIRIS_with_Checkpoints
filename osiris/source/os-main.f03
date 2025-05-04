@@ -212,10 +212,12 @@ subroutine run_sim( sim )
   use m_time
   use m_restart
   use m_dynamic_loadbalance
+  use m_workflow !*!
 
   implicit none
 
   class( t_simulation ), intent(inout) :: sim
+  logical :: file_ok  !*! Variable to call file_exists() to check if the file exists
 
   ! --
 
@@ -228,6 +230,8 @@ subroutine run_sim( sim )
   ! synchronize all nodes
   DEBUG("Sychronizing nodes before main simulation loop")
   call sim%no_co % barrier()
+  
+  file_ok = file_exists()
 
   do
     ! check if profiling should be added
