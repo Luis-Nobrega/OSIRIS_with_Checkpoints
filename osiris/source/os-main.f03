@@ -227,8 +227,6 @@ subroutine run_sim( sim )
     print *, ''
   endif
 
-  ! call check_file_exists(file_ok) !*! 04_05
-
   ! synchronize all nodes
   DEBUG("Sychronizing nodes before main simulation loop")
   call sim%no_co % barrier()

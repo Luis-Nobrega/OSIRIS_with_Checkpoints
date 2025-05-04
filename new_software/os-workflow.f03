@@ -4,7 +4,7 @@ module m_workflow
     private
     public :: check_workflow_step, set_workflow_step  ! Making the subroutine public
 
-    integer :: iteration_counter = 1
+    integer :: iteration_counter = 0
     integer :: workflow_step = 50  
     
     character(len=*), parameter :: steering_filename = 'steering_input_deck'
@@ -48,13 +48,10 @@ contains
                 print*, "File exists and is readable"
             else
                 file_ok = .false.
-                print*, "File exists but could not be opened"
-                print*, "Error opening file: ", steering_filename
-                print*, "I/O error code: ", ierr
+                print*, "File could not be opened. I/O error code: ", ierr
             end if
         else
             file_ok = .false.
-            print*, "File does not exist"
         end if
     end subroutine check_file_exists
 
@@ -89,19 +86,26 @@ contains
         logical, intent(out) :: file_ok
         character(len=256) :: used_filename
         logical :: file_exists_now
+        
+        ! First do the cheap modulo check
+        if (iand(iteration_counter, workflow_step - 1) == 0) then  ! Faster alternative to MOD when workflow_step is power of 2
+        ! Alternative: if (mod(iteration_counter, workflow_step) == 0) then  ! Standard version
+        
+            ! Only check file if we passed the modulo test
+            call check_file_exists(file_exists_now)
+            
+            if (file_exists_now) then
+                print*, "Reading workflow file at iteration: ", iteration_counter
 
-        call check_file_exists(file_exists_now)
-
-        if (mod(iteration_counter, workflow_step) == 0 .and. file_exists_now) then
-            print*, "Reading workflow file at iteration: ", iteration_counter
-            print*, "File: ", steering_filename
-
-            used_filename = trim(steering_filename) // '_used'
-            call rename_file(steering_filename, used_filename, file_ok)
+                used_filename = trim(steering_filename) // '_used'
+                call rename_file(steering_filename, used_filename, file_ok)
+            else
+                file_ok = .false.
+            end if
         else
             file_ok = .false.
         end if
-
+        
         iteration_counter = iteration_counter + 1
     end subroutine check_workflow_step
 
