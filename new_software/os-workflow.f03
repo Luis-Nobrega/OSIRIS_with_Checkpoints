@@ -1,4 +1,6 @@
 module m_workflow  
+
+    use m_workflow_reader
     implicit none 
 
     private
@@ -6,8 +8,9 @@ module m_workflow
 
     integer :: iteration_counter = 0
     integer :: workflow_step = 50  
+    integer :: ierr
     
-    character(len=*), parameter :: steering_filename = 'steering_input_deck'
+    character(len=*), parameter :: filename = steering_filename ! imported from m_workflow_reader
 
 contains      
 
@@ -38,10 +41,10 @@ contains
         logical :: exists
         integer :: iunit, ierr
 
-        inquire(file=steering_filename, exist=exists)
+        inquire(file=filename, exist=exists)
 
         if (exists) then
-            open(newunit=iunit, file=steering_filename, status='old', iostat=ierr)
+            open(newunit=iunit, file=filename, status='old', iostat=ierr)
             if (ierr == 0) then
                 close(iunit)
                 file_ok = .true.
@@ -97,8 +100,20 @@ contains
             if (file_exists_now) then
                 print*, "Reading workflow file"
 
-                used_filename = trim(steering_filename) // '_used'
-                call rename_file(steering_filename, used_filename, file_ok)                
+                call read_steering_file(ierr) 
+                if (ierr /= 0) then
+                    print*, "Error reading workflow file: ", ierr
+                    file_ok = .false.
+                    return
+                else 
+                    print*, "Workflow file read successfully"
+                    print *, "Nome do usuário: ", get_value("usuario") ! DEBUGGING
+                    print *, "Nome do arquivo: ", get_size() ! DEBUGGING
+                    !!!!!!!!!!!!!!! meter aqui rotina para armazenar 
+                end if
+
+                used_filename = trim(filename) // '_used'
+                call rename_file(filename, used_filename, file_ok)                
             else
                 file_ok = .false.
             end if
@@ -108,5 +123,7 @@ contains
         
         iteration_counter = iteration_counter + 1
     end subroutine check_workflow_step
+
+
 
 end module m_workflow

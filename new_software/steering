@@ -1,0 +1,32 @@
+! Este file vai ter as opções que se quer 
+! Para true ou false vai ser 0 ou 1 
+! nome do ficheiro = "steering_input_deck"
+
+shutdown = 1
+checkpoint = 1 
+restart = 1 
+
+
+! meter outras opções aqui 
+
+steering_input_deck
+
+
+
+
+program minimal_example
+    use m_key_value_reader
+    implicit none
+    integer :: ierr
+    
+    ! Carrega o arquivo (única chamada necessária)
+    call read_steering_file(ierr)
+    
+    if (ierr == 0) then
+        ! Acesso direto aos valores
+        print *, "Nome do usuário: ", get_value("usuario")
+        print *, "Configurações carregadas: ", get_size()
+    else
+        print *, "Erro na leitura do arquivo: ", ierr
+    end if
+end program minimal_example

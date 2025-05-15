@@ -218,7 +218,7 @@ subroutine run_sim( sim )
 
   class( t_simulation ), intent(inout) :: sim
   logical :: file_ok  !*! Variable to call file_exists() to check if the file exists
-  
+
   ! --
 
   call set_workflow_step(100) !*! 04_05
@@ -232,6 +232,7 @@ subroutine run_sim( sim )
   ! synchronize all nodes
   DEBUG("Sychronizing nodes before main simulation loop")
   call sim%no_co % barrier()
+  
 
   do
     ! check if profiling should be added
