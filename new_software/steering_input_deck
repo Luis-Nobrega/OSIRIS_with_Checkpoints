@@ -1,0 +1,6 @@
+simulation_name = test_simulation
+time_steps = 1000
+output_frequency = 50
+initial_condition = uniform
+! This is a comment
+output_format = vtk

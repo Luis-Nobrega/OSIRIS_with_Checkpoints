@@ -213,6 +213,7 @@ subroutine run_sim( sim )
   use m_restart
   use m_dynamic_loadbalance
   use m_workflow !*!
+  use m_workflow_reader !*!
 
   implicit none
 
@@ -268,7 +269,9 @@ subroutine run_sim( sim )
 
     ! check if a file should be read by the root node
     if (root(sim%no_co)) then 
-      call check_workflow_step(file_ok) !*! 04_05
+      ! call check_workflow_step(file_ok) !*! 04_05
+      
+
     endif
 
      ! do any per-iteration maintenance

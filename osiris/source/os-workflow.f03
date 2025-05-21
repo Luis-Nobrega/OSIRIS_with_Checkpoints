@@ -108,6 +108,7 @@ contains
                 else 
                     print*, "Workflow file read successfully"
                     print *, "Nome do usuário: ", get_value("usuario") ! DEBUGGING
+                    print *, "Nome do arquivo: ", get_size() ! DEBUGGING
                     !!!!!!!!!!!!!!! meter aqui rotina para armazenar 
                 end if
 

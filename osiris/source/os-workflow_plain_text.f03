@@ -23,7 +23,7 @@ module m_workflow_reader
     
     ! Instância única da coleção
     type(term_value_collection), private :: collection ! Dados ficam armazenados aqui 
-    character(len=*), parameter :: steering_filename = 'steering_input_deck'
+    character(len=256), parameter :: steering_filename = 'steering_input_deck'
 
 contains
 
@@ -34,7 +34,10 @@ contains
         
         open(newunit=unit, file=steering_filename, status='old', action='read', iostat=io_stat)
         if (present(iostat)) iostat = io_stat
-        if (io_stat /= 0) return
+        if (io_stat /= 0) then
+            print *, "File didn't open properly!", trim(steering_filename), "iostat=", io_stat
+            return
+        end if
         
         call read_key_value_lines(unit, process_pair, io_stat)
         close(unit)
@@ -76,7 +79,8 @@ contains
             if (io_stat /= 0) exit
             
             ! ... [rest of processing unchanged] ...
-            
+
+            print *, "DEBUG - Found pair: ", trim(key), " = ", trim(value)  ! Add this line
             call processor(key, value, success)
             if (.not. success .and. present(iostat)) iostat = -2
         end do

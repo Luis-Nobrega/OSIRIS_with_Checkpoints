@@ -3,10 +3,10 @@ module m_workflow_reader
     implicit none
     private
     
-    ! Interfaces públicas
+    ! Public interfaces
     public :: read_steering_file, get_value, get_size, steering_filename
     
-    ! Tipo para armazenamento interno
+    ! Internal storage type
     type :: term_value_pair
         character(len=:), allocatable :: term
         character(len=:), allocatable :: value
@@ -21,20 +21,22 @@ module m_workflow_reader
         procedure :: size => collection_size
     end type term_value_collection
     
-    ! Instância única da coleção
-    type(term_value_collection), private :: collection ! Dados ficam armazenados aqui 
-    character(len=*), parameter :: steering_filename = 'steering_input_deck'
+    ! Single collection instance
+    type(term_value_collection), private :: collection
+    character(len=256), parameter :: steering_filename = 'steering_input_deck'
 
 contains
 
-    ! Carregamento automático do arquivo
     subroutine read_steering_file(iostat)
         integer, intent(out), optional :: iostat
         integer :: unit, io_stat
         
         open(newunit=unit, file=steering_filename, status='old', action='read', iostat=io_stat)
         if (present(iostat)) iostat = io_stat
-        if (io_stat /= 0) return
+        if (io_stat /= 0) then
+            print *, "File didn't open properly!", trim(steering_filename), "iostat=", io_stat
+            return
+        end if
         
         call read_key_value_lines(unit, process_pair, io_stat)
         close(unit)
@@ -42,7 +44,6 @@ contains
         if (present(iostat)) iostat = io_stat
     end subroutine read_steering_file
 
-    ! Funções de acesso direto aos valores
     function get_value(key) result(value)
         character(len=*), intent(in) :: key
         character(len=:), allocatable :: value
@@ -54,7 +55,6 @@ contains
         n = collection%size()
     end function get_size
 
-    ! Implementações internas
     subroutine read_key_value_lines(file_unit, processor, iostat)
         integer, intent(in) :: file_unit
         interface
@@ -75,13 +75,38 @@ contains
             read(file_unit, '(A)', iostat=io_stat) line
             if (io_stat /= 0) exit
             
-            ! ... [rest of processing unchanged] ...
+            ! Skip empty lines
+            if (len_trim(line) == 0) cycle
             
+            ! Find comment marker (!) and ignore everything after it
+            comment_pos = index(line, '!')
+            if (comment_pos > 0) then
+                line = line(1:comment_pos-1)
+            end if
+            
+            ! Skip if line is empty after comment removal
+            if (len_trim(line) == 0) cycle
+            
+            ! Find equals sign
+            eq_pos = index(line, '=')
+            if (eq_pos == 0) cycle  ! Skip lines without equals sign
+            
+            ! Extract key (left of equals) and value (right of equals)
+            key = adjustl(line(1:eq_pos-1))
+            value = adjustl(line(eq_pos+1:))
+            
+            ! Remove any remaining whitespace
+            key = trim(key)
+            value = trim(value)
+            
+            ! Skip if key is empty
+            if (len_trim(key) == 0) cycle
+            
+            print *, "DEBUG - Found pair: '", trim(key), "' = '", trim(value), "'"
             call processor(key, value, success)
             if (.not. success .and. present(iostat)) iostat = -2
         end do
         
-        ! CORRECTED SECTION: Proper iostat_end usage
         if (present(iostat)) then
             if (io_stat == iostat_end) then
                 iostat = 0  ! Normal end-of-file
