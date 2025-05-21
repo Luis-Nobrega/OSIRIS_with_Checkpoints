@@ -44,9 +44,6 @@ include fft/Makefile
 
 src +=  os-param.f90 os-units.f90 os-math.f90 os-input-file.f03 os-util.f90 
 
-src += os-workflow_plain_text.f03 # !*!
-src += os-workflow.f03 # !*!
-
 include memory/Makefile
 
 include dutil/Makefile
@@ -88,6 +85,10 @@ src += os-bnd.f03
 include particles/Makefile
 
 src += os-simulation.f03 os-dynloadbalance.f03
+
+# new particle code for steering 
+src += os-workflow_plain_text.f03 # !*!
+src += os-workflow.f03 # !*!
 
 # SIMD code
 include simd/Makefile

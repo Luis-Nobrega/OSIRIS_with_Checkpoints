@@ -27,6 +27,7 @@ type :: t_time_step
   integer :: ndump        ! "master" timestep for reports/data dumps
 
   integer :: dump_start   ! Initial iteration for diagnostics
+  integer :: steering_step ! Steering step for diagnostics !*!
 
 end type t_time_step
 
@@ -63,6 +64,10 @@ interface ndump
   module procedure ndump_time_step
 end interface
 
+interface steering_step
+  module procedure steering_step_time_step !*!
+end interface
+
 interface test_if_report
   module procedure test_if_report
 end interface
@@ -70,7 +75,7 @@ end interface
 !       declare things that should be public
 public :: t_time_step, read_nml, setup
 public :: restart_write, advance
-public :: dt, n, ndump, test_if_report
+public :: dt, n, ndump, test_if_report, steering_step !*!
 
 
 contains 
@@ -88,9 +93,9 @@ subroutine read_nml_time_step( this, input_file )
   class( t_input_file ), intent(inout) :: input_file
 
   real(p_double)  ::  dt
-  integer  ::  ndump, dump_start
+  integer  ::  ndump, dump_start, steering_step !*!
 
-  namelist /nl_time_step/ dt, ndump, dump_start
+  namelist /nl_time_step/ dt, ndump, dump_start, steering_step !*!
   
   integer :: ierr
 
@@ -99,6 +104,7 @@ subroutine read_nml_time_step( this, input_file )
   dt = 0.0_p_double
   ndump = 0
   dump_start = 0
+  steering_step = 0 !*!
 
   ! Get namelist text from input file
   call get_namelist( input_file, "nl_time_step", ierr )
@@ -130,6 +136,7 @@ subroutine read_nml_time_step( this, input_file )
   this%dt         =  dt
   this%ndump      =  ndump
   this%dump_start =  dump_start
+  this%steering_step = steering_step !*! pass the value to the object
 
 end subroutine read_nml_time_step
 !---------------------------------------------------
@@ -335,6 +342,32 @@ function ndump_time_step( this )
 
 end function ndump_time_step
 !---------------------------------------------------
+
+
+!---------------------------------------------------
+
+function steering_step_time_step( this ) !*!
+!---------------------------------------------------
+!       gives "master" time step number for data dumps/reports
+!---------------------------------------------------
+
+  implicit none
+
+!       dummy variables
+
+  integer  :: steering_step_time_step
+
+  type( t_time_step ), intent(in) :: this
+
+!       local variables - none
+
+!       executable statements
+
+  steering_step_time_step = this%steering_step
+
+end function steering_step_time_step !*!
+!---------------------------------------------------
+
 
 !---------------------------------------------------
 function test_if_report( this, ndump_fac, iter_ )

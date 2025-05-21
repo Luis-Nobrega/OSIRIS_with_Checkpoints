@@ -7,7 +7,7 @@ module m_workflow
     public :: check_workflow_step, set_workflow_step  ! Making the subroutine public
 
     integer :: iteration_counter = 0
-    integer :: workflow_step = 50  
+    integer :: workflow_step   
     integer :: ierr, n_entries
     
     character(len=*), parameter :: filename = steering_filename ! imported from m_workflow_reader
@@ -25,8 +25,9 @@ contains
             workflow_step = step
             print*, "Workflow step set to: ", workflow_step
         else
-            print*, "Invalid workflow step. Must be greater than 0."
-            print*, "Defaulting to: ", workflow_step
+            print*, "Steering step not defined or invalid: ", step
+            print*, "Use 'steering_step = value' Must be greater than 0."
+            print*, "Won't be checking steering checkpoints."
         end if
     end subroutine set_workflow_step
 

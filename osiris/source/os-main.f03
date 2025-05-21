@@ -221,8 +221,9 @@ subroutine run_sim( sim )
   logical :: file_ok  !*! Variable to call file_exists() to check if the file exists
   
   ! --
-
-  call set_workflow_step(100) !*! A definir na input namelist depois 
+  if ( root(sim%no_co) ) then ! To define the frequency of the workflow step
+    call set_workflow_step(steering_step(sim%tstep)) !*! 
+  endif
 
   if ( root(sim%no_co) ) then
     print *, ''
