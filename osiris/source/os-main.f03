@@ -222,7 +222,7 @@ subroutine run_sim( sim )
   
   ! --
 
-  call set_workflow_step(100) !*! 04_05
+  call set_workflow_step(100) !*! A definir na input namelist depois 
 
   if ( root(sim%no_co) ) then
     print *, ''
@@ -267,9 +267,9 @@ subroutine run_sim( sim )
      ! Do 1 iteration
      call sim%iter()
 
-    ! check if a file should be read by the root node
+    ! check if a file should be read by the root node 
     if (root(sim%no_co)) then 
-      ! call check_workflow_step(file_ok) !*! 04_05
+      call check_workflow_step(file_ok) !*! 04_05
       
 
     endif

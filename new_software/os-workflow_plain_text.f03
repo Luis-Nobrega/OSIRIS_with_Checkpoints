@@ -23,7 +23,7 @@ module m_workflow_reader
     
     ! Single collection instance
     type(term_value_collection), private :: collection
-    character(len=256), parameter :: steering_filename = 'steering_input_deck'
+    character(len=256), parameter :: steering_filename = 'steering_input_deck' ! Name of the steering file
 
 contains
 
@@ -102,7 +102,7 @@ contains
             ! Skip if key is empty
             if (len_trim(key) == 0) cycle
             
-            print *, "DEBUG - Found pair: '", trim(key), "' = '", trim(value), "'"
+            ! print *, "DEBUG - Found pair: '", trim(key), "' = '", trim(value), "'"
             call processor(key, value, success)
             if (.not. success .and. present(iostat)) iostat = -2
         end do

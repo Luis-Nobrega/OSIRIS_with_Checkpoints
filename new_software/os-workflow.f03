@@ -8,7 +8,7 @@ module m_workflow
 
     integer :: iteration_counter = 0
     integer :: workflow_step = 50  
-    integer :: ierr
+    integer :: ierr, n_entries
     
     character(len=*), parameter :: filename = steering_filename ! imported from m_workflow_reader
 
@@ -106,10 +106,12 @@ contains
                     file_ok = .false.
                     return
                 else 
-                    print*, "Workflow file read successfully"
-                    print *, "Nome do usuário: ", get_value("usuario") ! DEBUGGING
-                    print *, "Nome do arquivo: ", get_size() ! DEBUGGING
-                    !!!!!!!!!!!!!!! meter aqui rotina para armazenar 
+                    n_entries = get_size()
+                    print *, "Number of key-value pairs found: ", n_entries
+
+                    call test_key("restart")
+
+                    !!!!!!!!!!!!!!! meter aqui rotina para alterar valores ETC
                 end if
 
                 used_filename = trim(filename) // '_used'
@@ -124,6 +126,17 @@ contains
         iteration_counter = iteration_counter + 1
     end subroutine check_workflow_step
 
+    subroutine test_key(key)
+        character(len=*), intent(in) :: key
+        character(len=:), allocatable :: val
+        
+        val = get_value(key)
+        if (len(val) > 0) then
+            print *, "'", trim(key), "' = '", trim(val), "'"
+        else
+            print *, "Key '", trim(key), "' not found or has empty value"
+        end if
+    end subroutine test_key
 
 
 end module m_workflow
