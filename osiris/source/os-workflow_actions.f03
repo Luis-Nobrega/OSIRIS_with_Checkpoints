@@ -22,34 +22,55 @@ module m_workflow_actions
 
 contains
 
-    subroutine check_and_execute(sim)
+    subroutine check_and_execute(sim, can_checkpoint)
         class( t_simulation ), intent(inout) :: sim
         character(len=:), allocatable :: val
         integer :: i, new_step  ! Mudamos o nome da variável para evitar conflito
+        logical :: is_checkpoint_step
+        logical , intent(inout) :: can_checkpoint
+
+        ! Check if current step is a checkpoint step
+        is_checkpoint_step = if_restart_write( sim%restart, n(sim%tstep), ndump(sim%tstep), &
+                                        comm(sim%no_co), sim%no_co%ngp_id() )
 
         do i = 1, MAX_KEYS
             val = get_value(trim(keys(i)))
             if (len_trim(val) == 0) then
-                print *, "DEBUG - No command found for ", trim(keys(i))
+                if ( mpi_node() == 0 ) then
+                    print *, "DEBUG - No value found for ", trim(keys(i))
+                end if
+                ! Skip iteration if no value is found
                 cycle
             end if
 
             select case (trim(keys(i)))
                 case ("checkpoint")
-                    call write_restart(sim)
-                    print*, "DEBUG - Checkpoint command executed"
+                    if  (.not. is_checkpoint_step) then
+                        can_checkpoint = .true.               
+                    else
+                        can_checkpoint = .false.
+                        if ( mpi_node() == 0 ) then
+                            print*, "DEBUG - Checkpoint command skipped due to existing checkpoint"
+                        end if
+                    end if
 
                 case ("restart")
-                    print*, "DEBUG - Restart command found"
+                    if ( mpi_node() == 0 ) then
+                        print*, "DEBUG - Restart command found"
+                    end if
                     ! Implementar lógica de reinício
 
                 case ("steering_step") 
                     read(val, *) new_step  ! Usamos variável diferente
                     call set_workflow_step(new_step)
-                    print*, "DEBUG - Steering step changed to ", new_step
+                    if ( mpi_node() == 0 ) then
+                        print*, "DEBUG - Steering step changed to ", new_step
+                    end if
 
                 case default
-                    print *, "Unknown command"
+                    if ( mpi_node() == 0 ) then
+                        print *, "Unknown command"
+                    end if
             end select
         end do
     end subroutine check_and_execute

@@ -1,5 +1,5 @@
 node_conf {
-  node_number(1:2) =  1, 1,           ! Use 2 x 2 parallel nodes
+  node_number(1:2) =  2, 2,           ! Use 2 x 2 parallel nodes
   if_periodic(1:2) = .true., .true.,  ! Periodic boundaries in both x and y
   n_threads = 1,                      ! Use 2 threads per node
 }

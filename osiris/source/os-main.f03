@@ -219,7 +219,7 @@ subroutine run_sim( sim )
   implicit none
 
   class( t_simulation ), intent(inout) :: sim
-  logical :: file_ok  !*! Variable to call file_exists() to check if the file exists
+  logical :: file_ok, can_checkpoint  !*! Variable to call file_exists() to check if the file exists
   integer :: file_ok_int
   
   ! --
@@ -282,15 +282,17 @@ subroutine run_sim( sim )
     file_ok_int = 0
     if (file_ok) file_ok_int = 1
     call broadcast(sim%no_co, file_ok_int)
-    file_ok = (file_ok_int == 1)
-    
-    if (file_ok) then
-      call check_and_execute(sim)
-    endif
-   
+    file_ok = (file_ok_int == 1)   
 
      ! do any per-iteration maintenance
      call sim%iter_finished()
+
+     if (file_ok) then !*!
+      call check_and_execute(sim, can_checkpoint) 
+      if (can_checkpoint) then
+        call write_restart( sim )
+      endif
+    endif !*!
 
      ! write restart files if necessary
      if ( if_restart_write( sim%restart, n(sim%tstep), ndump(sim%tstep), &
