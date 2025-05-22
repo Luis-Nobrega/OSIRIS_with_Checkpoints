@@ -1,69 +1,177 @@
-module m_laser
-  implicit none
-  public :: t_laser, laser_params, nl_laser  ! Adicione nl_laser aos públicos
-
-  type :: t_laser
-    real :: wavelength  ! Nome deve bater exatamente com o namelist
-    real :: peak_power  ! Incluindo capitalização
-  end type
-
-  type(t_laser) :: laser_params
-
-  ! Namelist deve usar as mesmas variáveis que estão no tipo
-  namelist /nl_laser/ laser_params  ! Note que usamos a estrutura completa
-
-end module
-
-
 module m_workflow_reader
-  use m_input_file
-  use m_laser, only: t_laser, laser_params, nl_laser  ! Importe explicitamente
-  use mpi
-  implicit none
+
+    use, intrinsic :: iso_fortran_env, only: iostat_end
+    implicit none
+    private
+    
+    ! Public interfaces
+    public :: read_steering_file, get_value, get_size, steering_filename
+    
+    ! Internal storage type
+    type :: term_value_pair
+        character(len=:), allocatable :: term
+        character(len=:), allocatable :: value
+    end type term_value_pair
+    
+    type :: term_value_collection
+        type(term_value_pair), allocatable :: pairs(:)
+        integer :: count = 0
+    contains
+        procedure :: add => add_or_update_term
+        procedure :: get => get_term_value
+        procedure :: size => collection_size
+    end type term_value_collection
+    
+    ! Single collection instance
+    type(term_value_collection), private :: collection
+    character(len=256), parameter :: steering_filename = 'steering_input_deck' ! Name of the steering file
 
 contains
 
-  subroutine read_workflow_deck(filename)
-    implicit none
-    character(len=*), intent(in) :: filename
-    integer :: stat, ierr
+    subroutine read_steering_file(iostat)
+        integer, intent(out), optional :: iostat
+        integer :: unit, io_stat
+        
+        open(newunit=unit, file=steering_filename, status='old', action='read', iostat=io_stat)
+        if (present(iostat)) iostat = io_stat
+        if (io_stat /= 0) then
+            print *, "File didn't open properly!", trim(steering_filename), "iostat=", io_stat
+            return
+        end if
+        
+        call read_key_value_lines(unit, process_pair, io_stat)
+        close(unit)
+        
+        if (present(iostat)) iostat = io_stat
+    end subroutine read_steering_file
 
-    ! 1) Ler o arquivo
-    call open_input(steering_file, filename, MPI_COMM_WORLD)
+    function get_value(key) result(value)
+        character(len=*), intent(in) :: key
+        character(len=:), allocatable :: value
+        value = collection%get(key)
+    end function get_value
 
-    ! Debug 1: Verificar se o buffer foi carregado
-    if (steering_file%data_size == 0) then
-      print *, "Erro: Buffer vazio após open_input!"
-      return
-    else
-      print *, "Debug: Tamanho do buffer = ", steering_file%data_size
-    endif
+    function get_size() result(n)
+        integer :: n
+        n = collection%size()
+    end function get_size
 
-    ! 2) Procurar pelo bloco "nl_laser", substituindo o nome para "laser"
-    steering_file%pos = 0
-    call get_namelist(steering_file, 'nl_laser', stat, nml_output='laser')
+    subroutine read_key_value_lines(file_unit, processor, iostat)
+        integer, intent(in) :: file_unit
+        interface
+            subroutine processor(key, value, success)
+                character(len=*), intent(in) :: key
+                character(len=*), intent(in) :: value
+                logical, intent(out) :: success
+            end subroutine
+        end interface
+        integer, intent(out), optional :: iostat
+        character(len=256) :: line, key, value
+        integer :: io_stat, eq_pos, comment_pos
+        logical :: success
+        
+        if (present(iostat)) iostat = 0
+        
+        do
+            read(file_unit, '(A)', iostat=io_stat) line
+            if (io_stat /= 0) exit
+            
+            ! Skip empty lines
+            if (len_trim(line) == 0) cycle
+            
+            ! Find comment marker (!) and ignore everything after it
+            comment_pos = index(line, '!')
+            if (comment_pos > 0) then
+                line = line(1:comment_pos-1)
+            end if
+            
+            ! Skip if line is empty after comment removal
+            if (len_trim(line) == 0) cycle
+            
+            ! Find equals sign
+            eq_pos = index(line, '=')
+            if (eq_pos == 0) cycle  ! Skip lines without equals sign
+            
+            ! Extract key (left of equals) and value (right of equals)
+            key = adjustl(line(1:eq_pos-1))
+            value = adjustl(line(eq_pos+1:))
+            
+            ! Remove any remaining whitespace
+            key = trim(key)
+            value = trim(value)
+            
+            ! Skip if key is empty
+            if (len_trim(key) == 0) cycle
+            
+            ! print *, "DEBUG - Found pair: '", trim(key), "' = '", trim(value), "'"
+            call processor(key, value, success)
+            if (.not. success .and. present(iostat)) iostat = -2
+        end do
+        
+        if (present(iostat)) then
+            if (io_stat == iostat_end) then
+                iostat = 0  ! Normal end-of-file
+            else
+                iostat = io_stat  ! Propagate other errors
+            end if
+        end if
+    end subroutine read_key_value_lines
 
-    ! Debug 2: Verificar resultado da busca
-    print *, "Debug: stat após get_namelist = ", stat
+    subroutine process_pair(key, value, success)
+        character(len=*), intent(in) :: key, value
+        logical, intent(out) :: success
+        call collection%add(key, value, success)
+    end subroutine process_pair
 
-    if (stat == 0) then
-      ! Debug 3: Mostrar conteúdo bruto do namelist
-      print *, "Conteúdo do namelist 'laser':"
-      print *, "'", trim(steering_file%nml_text), "'"
+    subroutine add_or_update_term(this, key, value, success)
+        class(term_value_collection), intent(inout) :: this
+        character(len=*), intent(in) :: key, value
+        logical, intent(out) :: success
+        integer :: i
+        
+        do i = 1, this%count
+            if (this%pairs(i)%term == key) then
+                this%pairs(i)%value = value
+                success = .true.
+                return
+            end if
+        end do
+        
+        if (.not. allocated(this%pairs)) allocate(this%pairs(10))
+        if (this%count == size(this%pairs)) then
+            block
+                type(term_value_pair), allocatable :: temp(:)
+                allocate(temp(2*size(this%pairs)))
+                temp(1:this%count) = this%pairs
+                call move_alloc(temp, this%pairs)
+            end block
+        end if
+        
+        this%count = this%count + 1
+        this%pairs(this%count)%term = key
+        this%pairs(this%count)%value = value
+        success = .true.
+    end subroutine add_or_update_term
 
-      ! 3) Ler os parâmetros
-      read(steering_file%nml_text, nml=nl_laser, iostat=ierr)
+    function get_term_value(this, term) result(value)
+        class(term_value_collection), intent(in) :: this
+        character(len=*), intent(in) :: term
+        character(len=:), allocatable :: value
+        integer :: i
+        
+        value = ""
+        do i = 1, this%count
+            if (this%pairs(i)%term == term) then
+                value = this%pairs(i)%value
+                exit
+            end if
+        end do
+    end function get_term_value
 
-      ! Debug 4: Verificar erro na leitura
-      if (ierr /= 0) then
-        print *, "Erro na leitura do namelist! Código:", ierr
-      else
-        print *, "Leitura bem-sucedida!"
-      endif
-    else
-      print *, "Erro: Seção 'nl_laser' não encontrada."
-    endif
-  end subroutine
+    function collection_size(this) result(n)
+        class(term_value_collection), intent(in) :: this
+        integer :: n
+        n = this%count
+    end function collection_size
 
-
-end module
+end module m_workflow_reader

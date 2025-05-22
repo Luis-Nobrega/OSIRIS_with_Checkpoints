@@ -87,8 +87,9 @@ include particles/Makefile
 src += os-simulation.f03 os-dynloadbalance.f03
 
 # new particle code for steering 
-src += os-workflow_plain_text.f03 # !*!
+src += os-workflow_reader.f03 # !*!
 src += os-workflow.f03 # !*!
+src += os-workflow_actions.f03 # !*!
 
 # SIMD code
 include simd/Makefile

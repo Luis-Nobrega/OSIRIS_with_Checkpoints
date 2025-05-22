@@ -214,11 +214,13 @@ subroutine run_sim( sim )
   use m_dynamic_loadbalance
   use m_workflow !*!
   use m_workflow_reader !*!
+  use m_workflow_actions !*!
 
   implicit none
 
   class( t_simulation ), intent(inout) :: sim
   logical :: file_ok  !*! Variable to call file_exists() to check if the file exists
+  integer :: file_ok_int
   
   ! --
   if ( root(sim%no_co) ) then ! To define the frequency of the workflow step
@@ -268,12 +270,24 @@ subroutine run_sim( sim )
      ! Do 1 iteration
      call sim%iter()
 
-    ! check if a file should be read by the root node 
-    if (root(sim%no_co)) then 
-      call check_workflow_step(file_ok) !*! 04_05
-      
+    !*! Set to false to avoid desyncronization
+    file_ok = .false. 
 
+    ! check if a file should be read by the root node 
+    if (root(sim%no_co)) then !*! 
+      call check_workflow_step(file_ok)
     endif
+
+    !*! Broadcast file_ok to all nodes
+    file_ok_int = 0
+    if (file_ok) file_ok_int = 1
+    call broadcast(sim%no_co, file_ok_int)
+    file_ok = (file_ok_int == 1)
+    
+    if (file_ok) then
+      call check_and_execute(sim)
+    endif
+   
 
      ! do any per-iteration maintenance
      call sim%iter_finished()

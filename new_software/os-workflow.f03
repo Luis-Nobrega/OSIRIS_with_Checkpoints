@@ -107,12 +107,7 @@ contains
                     file_ok = .false.
                     return
                 else 
-                    n_entries = get_size()
-                    print *, "Number of key-value pairs found: ", n_entries
-
-                    call test_key("restart") ! METER AQUI O QUE MERO MUDARRRRRRRR
-
-                    !!!!!!!!!!!!!!! meter aqui rotina para alterar valores ETC
+                    file_ok = .true. ! ??????????????????????????? WTF do I put here 
                 end if
 
                 used_filename = trim(filename) // '_used'
@@ -127,7 +122,10 @@ contains
         iteration_counter = iteration_counter + 1
     end subroutine check_workflow_step
 
+    !<------------------------------------------->! 
+
     subroutine test_key(key)
+        ! This subroutine tests the key-value pair and displays it if non zero
         character(len=*), intent(in) :: key
         character(len=:), allocatable :: val
         

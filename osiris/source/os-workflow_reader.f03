@@ -1,4 +1,5 @@
 module m_workflow_reader
+
     use, intrinsic :: iso_fortran_env, only: iostat_end
     implicit none
     private
@@ -102,7 +103,7 @@ contains
             ! Skip if key is empty
             if (len_trim(key) == 0) cycle
             
-            print *, "DEBUG - Found pair: '", trim(key), "' = '", trim(value), "'"
+            ! print *, "DEBUG - Found pair: '", trim(key), "' = '", trim(value), "'"
             call processor(key, value, success)
             if (.not. success .and. present(iostat)) iostat = -2
         end do
