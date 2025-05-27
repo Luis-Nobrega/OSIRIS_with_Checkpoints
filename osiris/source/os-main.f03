@@ -219,8 +219,8 @@ subroutine run_sim( sim )
   implicit none
 
   class( t_simulation ), intent(inout) :: sim
-  logical :: file_ok, can_checkpoint  !*! Variable to call file_exists() to check if the file exists
-  integer :: file_ok_int
+  logical :: file_ok, steering_exit  !*! Variable to call file_exists() to check if the file exists
+  steering_exit = .false. 
   
   ! --
   ! To define the frequency of the workflow step
@@ -274,7 +274,15 @@ subroutine run_sim( sim )
     file_ok = .false. 
 
     !*! check if a file should be read by the root node 
-     call check_workflow_step(file_ok, sim, sim%no_co) 
+
+     call check_workflow_step(file_ok, sim, sim%no_co, steering_exit) !*!
+
+     if (steering_exit) then
+       if ( root(sim%no_co) ) then
+         print *, 'Exiting simulation due to workflow step exit.'
+       endif
+       exit
+     endif
 
      ! do any per-iteration maintenance
      call sim%iter_finished()

@@ -24,11 +24,13 @@ module m_workflow !*!
     character(len=*), parameter :: filename = steering_filename
     character(len=256) :: used_filename = "steering_input_deck.used" ! Novo nome para o ficheiro renomeado
 
-    integer, parameter :: MAX_KEYS = 3 !^!
+    integer, parameter :: MAX_KEYS = 5 !^!
     ! Definir as chaves de controlo do workflow
     character(len=20), parameter :: keys(MAX_KEYS) = & !^!
         ["checkpoint        ", &
          "restart           ", &
+         "stop              ", &
+         "abort             ", &
          "steering_step     "]
 
 contains
@@ -94,9 +96,9 @@ contains
         end if
     end subroutine rename_file
 
-    subroutine check_workflow_step(file_ok, sim, no_co)
+    subroutine check_workflow_step(file_ok, sim, no_co, steering_exit)
         implicit none
-        logical, intent(out) :: file_ok
+        logical, intent(out) :: file_ok, steering_exit
         type(t_simulation), intent(inout) :: sim
         type(t_node_conf), intent(in) :: no_co
         logical :: file_exists_now, success
@@ -117,7 +119,7 @@ contains
                         !if (success) print *, "DEBUG - Rename com sucesso"
                     end if
                     file_ok = .true.
-                    call check_and_execute(sim)
+                    call check_and_execute(sim, steering_exit)
                 else
                     file_ok = .false.
                 end if
@@ -140,13 +142,14 @@ contains
     ! <-------------------------------->!
 
 
-    subroutine check_and_execute(sim)
+    subroutine check_and_execute(sim, steering_exit)
         class( t_simulation ), intent(inout) :: sim
         character(len=:), allocatable :: val
         integer :: i, new_step  ! Mudamos o nome da variável para evitar conflito
         logical :: is_checkpoint_step
+        logical, intent(out) :: steering_exit
 
-        ! Check if current step is already a checkpoint step
+        ! Check if current step is already a checkpoint step --> mover para baixo?
         is_checkpoint_step = if_restart_write( sim%restart, n(sim%tstep), ndump(sim%tstep), &
                                         comm(sim%no_co), sim%no_co%ngp_id() )
 
@@ -162,7 +165,7 @@ contains
 
             select case (trim(keys(i)))
                 case ("checkpoint")
-                    if  (.not. is_checkpoint_step) then
+                    if  (.not. is_checkpoint_step .and. (val == "1")) then
                         call write_restart(sim)  ! Chama a sub-rotina de escrita de reinício               
                     else
                         if ( mpi_node() == 0 ) then
@@ -171,7 +174,7 @@ contains
                     end if
 
                 case ("restart")
-                    if ( mpi_node() == 0 ) then
+                    if ( mpi_node() == 0 .and. (val == "1") ) then
                         print*, "DEBUG - Restart command found"
                     end if
                     ! Implementar lógica de reinício
@@ -180,7 +183,26 @@ contains
                     read(val, *) new_step  ! Usamos variável diferente
                     call set_workflow_step(new_step, sim)
                     if ( mpi_node() == 0 ) then
-                        print*, "DEBUG - Steering step changed to ", new_step
+                        print*, "DEBUG - Steering step changed* to ", new_step
+                    end if
+                
+                case ("stop")
+                    if  (.not. is_checkpoint_step .and. (val == "1")) then
+                        call write_restart(sim)  ! Chama a sub-rotina de escrita de reinício 
+                        steering_exit = .true.  ! Define a flag de saída
+                    else
+                        if ( mpi_node() == 0 ) then
+                            print*, "DEBUG - Stop command skipped"
+                        end if
+                    end if
+                
+                 case ("abort")
+                    if  (val == "1") then 
+                        steering_exit = .true.  ! Define a flag de saída
+                    else
+                        if ( mpi_node() == 0 ) then
+                            print*, "DEBUG - Abort command skipped"
+                        end if
                     end if
 
                 case default
