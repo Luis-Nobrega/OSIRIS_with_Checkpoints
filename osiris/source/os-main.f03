@@ -213,8 +213,8 @@ subroutine run_sim( sim )
   use m_restart
   use m_dynamic_loadbalance
   use m_workflow !*!
-  use m_workflow_reader !*!
-  use m_workflow_actions !*!
+  ! use m_workflow_reader !*!
+  ! use m_workflow_actions !*!
 
   implicit none
 
@@ -223,9 +223,9 @@ subroutine run_sim( sim )
   integer :: file_ok_int
   
   ! --
-  if ( root(sim%no_co) ) then ! To define the frequency of the workflow step
-    call set_workflow_step(steering_step(sim%tstep)) !*! 
-  endif
+  ! To define the frequency of the workflow step
+  call set_workflow_step(steering_step(sim%tstep), sim) !*! 
+  
 
   if ( root(sim%no_co) ) then
     print *, ''
@@ -273,26 +273,11 @@ subroutine run_sim( sim )
     !*! Set to false to avoid desyncronization
     file_ok = .false. 
 
-    ! check if a file should be read by the root node 
-    if (root(sim%no_co)) then !*! 
-      call check_workflow_step(file_ok)
-    endif
-
-    !*! Broadcast file_ok to all nodes
-    file_ok_int = 0
-    if (file_ok) file_ok_int = 1
-    call broadcast(sim%no_co, file_ok_int)
-    file_ok = (file_ok_int == 1)   
+    !*! check if a file should be read by the root node 
+     call check_workflow_step(file_ok, sim, sim%no_co) 
 
      ! do any per-iteration maintenance
      call sim%iter_finished()
-
-     if (file_ok) then !*!
-      call check_and_execute(sim, can_checkpoint) 
-      if (can_checkpoint) then
-        call write_restart( sim )
-      endif
-    endif !*!
 
      ! write restart files if necessary
      if ( if_restart_write( sim%restart, n(sim%tstep), ndump(sim%tstep), &

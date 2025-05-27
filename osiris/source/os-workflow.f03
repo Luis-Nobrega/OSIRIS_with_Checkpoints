@@ -1,42 +1,58 @@
-module m_workflow  
+module m_workflow !*!
 
     use m_workflow_reader
-    implicit none 
+    use m_node_conf
+    use mpi
+    use m_simulation, only: t_simulation  ! Adiciona definição da simulação
+
+    use m_simulation !^!
+    use m_parameters !^!
+    use m_restart !^!
+    use m_logprof !^!
+    use m_time_step       !^! Para a função n()
+    use m_node_conf       !^! Para a função comm()
+
+    implicit none
 
     private
-    public :: check_workflow_step, set_workflow_step  ! Making the subroutine public
+    public :: check_workflow_step, set_workflow_step
 
     integer :: iteration_counter = 0
-    integer :: workflow_step   
+    integer :: workflow_step
     integer :: ierr, n_entries
-    
-    character(len=*), parameter :: filename = steering_filename ! imported from m_workflow_reader
 
-contains      
+    character(len=*), parameter :: filename = steering_filename
+    character(len=256) :: used_filename = "steering_input_deck.used" ! Novo nome para o ficheiro renomeado
 
-    subroutine set_workflow_step(step)
-        ! This subroutine sets the workflow step
-        ! Input argument:
-        ! step = the new workflow step value
+    integer, parameter :: MAX_KEYS = 3 !^!
+    ! Definir as chaves de controlo do workflow
+    character(len=20), parameter :: keys(MAX_KEYS) = & !^!
+        ["checkpoint        ", &
+         "restart           ", &
+         "steering_step     "]
+
+contains
+
+    subroutine set_workflow_step(step, sim)
         implicit none
         integer, intent(in) :: step
+        class(t_simulation), intent(inout) :: sim
 
         if (step > 0) then
             workflow_step = step
-            print*, "Workflow step set to: ", workflow_step
+            if (root(sim%no_co)) then
+                print*, "Workflow step set to: ", workflow_step
+            end if
         else
-            print*, "Steering step not defined or invalid: ", step
-            print*, "Use 'steering_step = value' Must be greater than 0."
-            print*, "Won't be checking steering checkpoints."
+            if (root(sim%no_co)) then
+                print*, "Steering step not defined or invalid: ", step
+                print*, "Use 'steering_step = value' Must be greater than 0."
+                print*, "Won't be checking steering checkpoints."
+            end if
         end if
     end subroutine set_workflow_step
 
-    !<------------------------------------------->!
-
     subroutine check_file_exists(file_ok)
-        ! This subroutine checks if the file exists and is readable
-        ! Output argument:
-        !   file_ok = .true. if file exists and can be opened, .false. otherwise
         implicit none
         logical, intent(out) :: file_ok
         logical :: exists
@@ -59,85 +75,164 @@ contains
         end if
     end subroutine check_file_exists
 
-    !<------------------------------------------->!
-
     subroutine rename_file(old_name, new_name, success)
-        ! Renames a file using a shell command
         implicit none
-        character(len=*), intent(in)  :: old_name
-        character(len=*), intent(in)  :: new_name
+        character(len=*), intent(in) :: old_name
+        character(len=*), intent(in) :: new_name
         logical, intent(out) :: success
         integer :: status
         character(len=512) :: command
 
-        ! Construct shell command (works for Unix-like systems)
         command = 'mv "' // trim(old_name) // '" "' // trim(new_name) // '"'
         call execute_command_line(trim(command), exitstat=status)
         success = (status == 0)
-        
+
         if (.not. success) then
             print *, "Error: Failed to rename file using shell command"
             print *, "Command: ", trim(command)
             print *, "Exit status: ", status
         end if
     end subroutine rename_file
-    
-    !<------------------------------------------->!
 
-    subroutine check_workflow_step(file_ok)
-        ! Verifies if step is valid for reading the new file 
+    subroutine check_workflow_step(file_ok, sim, no_co)
         implicit none
         logical, intent(out) :: file_ok
-        character(len=256) :: used_filename
-        logical :: file_exists_now
-        
-        ! First do the cheap modulo check
-        if (iteration_counter > 0 .and. mod(iteration_counter, workflow_step) == 0) then
-        ! if (iand(iteration_counter, workflow_step - 1) == 0) then  ! Faster alternative to MOD 
-        
-            ! Only check file if we passed the modulo test
-            call check_file_exists(file_exists_now)
-            
+        type(t_simulation), intent(inout) :: sim
+        type(t_node_conf), intent(in) :: no_co
+        logical :: file_exists_now, success
+        !character(len=:), allocatable :: val ! DEBUG
+
+        if (mod(iteration_counter, workflow_step) == 0 .and. iteration_counter /= 0) then
+            if (root(no_co)) call check_file_exists(file_exists_now)
+            call MPI_BCAST(file_exists_now, 1, MPI_LOGICAL, 0, no_co%comm, ierr)
+
             if (file_exists_now) then
-                print*, "Reading workflow file"
-
-                call read_steering_file(ierr) 
-                if (ierr /= 0) then
-                    print*, "Error reading workflow file: ", ierr
+                call read_steering_file(no_co, ierr)
+                !val = get_value("simulation_name") ! DEBUG
+                !print *, "DEBUG - simulation_name value: ", trim(val) ! DEBUG
+                if (ierr == 0) then
+                    !print *, "DEBUG - Leu com sucesso"
+                    if (root(no_co)) then
+                        call rename_file(filename, used_filename, success)
+                        !if (success) print *, "DEBUG - Rename com sucesso"
+                    end if
+                    file_ok = .true.
+                    call check_and_execute(sim)
+                else
                     file_ok = .false.
-                    return
-                else 
-                    n_entries = get_size()
-                    print *, "Number of key-value pairs found: ", n_entries
-
-                    call test_key("restart")
-
-                    !!!!!!!!!!!!!!! meter aqui rotina para alterar valores ETC
                 end if
-
-                used_filename = trim(filename) // '_used'
-                call rename_file(filename, used_filename, file_ok)                
             else
                 file_ok = .false.
             end if
         else
             file_ok = .false.
         end if
-        
+
         iteration_counter = iteration_counter + 1
+
+        !!! VER se vale a pena meter aqui uma flag 
+        ! que manda fazer barrier sse o workflow_actions 
+        ! Fizer alguma alteração à simulação 
     end subroutine check_workflow_step
 
-    subroutine test_key(key)
-        character(len=*), intent(in) :: key
-        character(len=:), allocatable :: val
-        
-        val = get_value(key)
-        if (len(val) > 0) then
-            print *, "'", trim(key), "' = '", trim(val), "'"
-        else
-            print *, "Key '", trim(key), "' not found or has empty value"
-        end if
-    end subroutine test_key
+    ! <-------------------------------->!
+    ! <--- Change of parameters --->!
+    ! <-------------------------------->!
 
+
+    subroutine check_and_execute(sim)
+        class( t_simulation ), intent(inout) :: sim
+        character(len=:), allocatable :: val
+        integer :: i, new_step  ! Mudamos o nome da variável para evitar conflito
+        logical :: is_checkpoint_step
+
+        ! Check if current step is already a checkpoint step
+        is_checkpoint_step = if_restart_write( sim%restart, n(sim%tstep), ndump(sim%tstep), &
+                                        comm(sim%no_co), sim%no_co%ngp_id() )
+
+        do i = 1, MAX_KEYS
+            val = get_value(trim(keys(i)))
+            if (len_trim(val) == 0) then
+                if ( mpi_node() == 0 ) then
+                    print *, "DEBUG - No value found for ", trim(keys(i))
+                end if
+                ! Skip iteration if no value is found
+                cycle
+            end if
+
+            select case (trim(keys(i)))
+                case ("checkpoint")
+                    if  (.not. is_checkpoint_step) then
+                        call write_restart(sim)  ! Chama a sub-rotina de escrita de reinício               
+                    else
+                        if ( mpi_node() == 0 ) then
+                            print*, "DEBUG - Checkpoint command skipped due to existing checkpoint"
+                        end if
+                    end if
+
+                case ("restart")
+                    if ( mpi_node() == 0 ) then
+                        print*, "DEBUG - Restart command found"
+                    end if
+                    ! Implementar lógica de reinício
+
+                case ("steering_step") 
+                    read(val, *) new_step  ! Usamos variável diferente
+                    call set_workflow_step(new_step, sim)
+                    if ( mpi_node() == 0 ) then
+                        print*, "DEBUG - Steering step changed to ", new_step
+                    end if
+
+                case default
+                    if ( mpi_node() == 0 ) then
+                        print *, "Unknown command", trim(keys(i))
+                    end if
+            end select
+        end do
+    end subroutine check_and_execute
+
+    ! <-------------------------------->! DUPLICATED ROUTINE FROM MAIN MODULE
+
+    subroutine write_restart( sim ) !^!
+
+        implicit none
+
+        class ( t_simulation ), intent(inout) :: sim
+
+        type( t_restart_handle )    ::  restart_handle
+
+        call begin_event(restart_write_ev)
+
+        if ( mpi_node() == 0 ) then
+            print *, ''
+            print *, ' Writing checkpoint information for timestep n =', n(sim%tstep)
+            print *, ''
+        endif
+
+        #ifdef __RST_SION__
+
+        ! Measure expected file size, only required by the sion library
+        restart_handle%if_acc_size = .true.
+        restart_handle%data_size = 0
+        call sim%write_checkpoint( restart_handle )
+        restart_handle%if_acc_size = .false.
+
+        #endif
+
+        ! Open checkpoint files
+        call restart_write_open( sim%restart, comm(sim%no_co), sim%no_co%ngp_id(), &
+                                n(sim%tstep), ndump(sim%tstep), &
+                                file_id_rst, restart_handle )
+
+        ! Write checkpoint data
+        call sim%write_checkpoint( restart_handle )
+
+        ! Close checkpoint files
+        call restart_write_close( sim%restart, comm(sim%no_co), sim%no_co%ngp_id(), &
+                                    n(sim%tstep), restart_handle )
+
+        call end_event(restart_write_ev)
+
+        end subroutine write_restart
 
 end module m_workflow

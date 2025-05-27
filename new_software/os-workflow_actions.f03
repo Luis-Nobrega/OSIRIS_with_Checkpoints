@@ -1,4 +1,4 @@
-module m_workflow_actions
+module m_workflow_actions !*!
 
     use m_workflow, only: set_workflow_step
     use m_workflow_reader, only: get_value
@@ -15,6 +15,7 @@ module m_workflow_actions
     public :: check_and_execute
 
     integer, parameter :: MAX_KEYS = 3
+    ! Definir as chaves de controlo do workflow
     character(len=20), parameter :: keys(MAX_KEYS) = &
         ["checkpoint        ", &
          "restart           ", &

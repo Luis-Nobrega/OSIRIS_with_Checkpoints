@@ -16,7 +16,7 @@ time_step {
 
 restart
 {
-  ndump_fac     = 5,
+  ndump_fac     = 0,
   if_restart    = .false.,
   if_remold     = .false.,
 }
