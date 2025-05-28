@@ -1,4 +1,4 @@
-module m_workflow_reader
+module m_workflow_reader !*!
 
     use, intrinsic :: iso_fortran_env, only: iostat_end
     use mpi, only: MPI_COMM_WORLD, MPI_INTEGER, MPI_CHARACTER, MPI_BCAST, MPI_BARRIER
@@ -7,7 +7,8 @@ module m_workflow_reader
     private
 
     ! Public interfaces
-    public :: read_steering_file, get_value, get_size, steering_filename
+    public :: read_steering_file, get_value, get_size, steering_filename, get_keys ! for reading the steering file
+    public :: parse_workflow_diagnostic, trim_diagnostic ! for diagnostics
 
     ! Internal storage type
     type :: term_value_pair
@@ -219,5 +220,143 @@ contains
         integer :: n
         n = this%count
     end function collection_size
+
+    function get_keys() result(keys)    
+        character(len=:), allocatable :: keys(:)
+        integer :: i, max_len
+
+        ! Primeiro determinar o comprimento máximo necessário
+        max_len = 0
+        do i = 1, collection%count
+            max_len = max(max_len, len_trim(collection%pairs(i)%term))
+        end do
+
+        ! Alocar o array com comprimento fixo suficiente
+        allocate(character(len=max_len) :: keys(collection%count))
+
+        ! Copiar as chaves
+        do i = 1, collection%count
+            keys(i) = trim(collection%pairs(i)%term)
+        end do
+    end function get_keys
+
+
+    ! <-------------------------------->!
+    ! <--- Read diagnostic commands --->!
+    ! <-------------------------------->!
+
+
+    subroutine parse_workflow_diagnostic(string, identifier, command, data, ierr)
+        ! Subroutine parses strings for workflow diagnostics.
+        ! Format: [identifier, command, value1, value2, ...]
+        character(len=*), intent(in) :: string
+        character(len=:), allocatable, intent(out) :: identifier, command
+        character(len=:), allocatable, intent(out) :: data(:)
+        logical, intent(out) :: ierr
+        
+        character(len=len(string)) :: working_string, temp_string
+        character(len=len(string)), allocatable :: temp_data(:)
+        integer :: i, n, pos, count
+        
+        ! Initialize outputs
+        ierr = .false.
+        if (allocated(identifier)) deallocate(identifier)
+        if (allocated(command)) deallocate(command)
+        if (allocated(data)) deallocate(data)
+        
+        ! Remove whitespace and brackets
+        working_string = adjustl(string)
+        working_string = trim(working_string)
+        if (len_trim(working_string) == 0) return
+        
+        ! Remove brackets if present
+        if (working_string(1:1) == '[' .and. working_string(len_trim(working_string):len_trim(working_string)) == ']') then
+            working_string = working_string(2:len_trim(working_string)-1)
+            working_string = trim(adjustl(working_string))
+        end if
+        
+        ! Count commas to determine number of elements
+        count = 1
+        do i = 1, len_trim(working_string)
+            if (working_string(i:i) == ',') count = count + 1
+        end do
+        
+        ! Need at least identifier, command, and one data value
+        if (count < 3) return
+        
+        ! First parse identifier
+        pos = index(working_string, ',')
+        if (pos == 0) return
+        identifier = trim(adjustl(working_string(1:pos-1)))
+        
+        ! Then parse command
+        temp_string = working_string(pos+1:)
+        pos = index(temp_string, ',')
+        if (pos == 0) return
+        command = trim(adjustl(temp_string(1:pos-1)))
+        
+        ! Finally parse data values
+        temp_string = temp_string(pos+1:)
+        count = 1
+        do i = 1, len_trim(temp_string)
+            if (temp_string(i:i) == ',') count = count + 1
+        end do
+        
+        ! Temporary fixed-length storage
+        allocate(character(len=len(temp_string)) :: temp_data(count))
+        
+        do i = 1, count
+            pos = index(temp_string, ',')
+            if (pos == 0) then
+                temp_data(i) = trim(adjustl(temp_string))
+                exit
+            else
+                temp_data(i) = trim(adjustl(temp_string(1:pos-1)))
+                temp_string = temp_string(pos+1:)
+            end if
+        end do
+        
+        ! Convert to deferred-length strings
+        allocate(character(len=maxval(len_trim(temp_data))) :: data(count))
+        do i = 1, count
+            data(i) = trim(temp_data(i))
+        end do
+        
+        ierr = .true.
+    end subroutine parse_workflow_diagnostic
+
+    subroutine trim_diagnostic(string, trimmed_name, ierr)
+        ! Subroutine to extract base diagnostic name (removes trailing _N)
+        ! Input format: "diag_type_N" → returns "diag_type"
+        character(len=*), intent(in) :: string
+        character(len=*), intent(out) :: trimmed_name
+        logical, intent(out) :: ierr
+        
+        integer :: first_underscore, second_underscore
+        
+        ! Initialize outputs
+        trimmed_name = ''
+        ierr = .false.
+        
+        ! Find first underscore
+        first_underscore = index(string, '_')
+        if (first_underscore == 0) return  ! No underscores found
+        
+        ! Find second underscore (after first one)
+        second_underscore = index(string(first_underscore+1:), '_')
+        
+        ! Extract appropriate portion of string
+        if (second_underscore > 0) then
+            trimmed_name = string(1:first_underscore + second_underscore - 1)
+        else
+            trimmed_name = trim(string)
+        end if
+        
+        ! Remove any leading/trailing whitespace
+        trimmed_name = trim(adjustl(trimmed_name))
+        
+        ! Set success flag if we got a non-empty result
+        if (len_trim(trimmed_name) > 0) ierr = .true.
+    end subroutine trim_diagnostic
 
 end module m_workflow_reader

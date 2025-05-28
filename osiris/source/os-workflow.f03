@@ -24,15 +24,6 @@ module m_workflow !*!
     character(len=*), parameter :: filename = steering_filename
     character(len=256) :: used_filename = "steering_input_deck.used" ! Novo nome para o ficheiro renomeado
 
-    integer, parameter :: MAX_KEYS = 5 !^!
-    ! Definir as chaves de controlo do workflow
-    character(len=20), parameter :: keys(MAX_KEYS) = & !^!
-        ["checkpoint        ", &
-         "restart           ", &
-         "stop              ", &
-         "abort             ", &
-         "steering_step     "]
-
 contains
 
     subroutine set_workflow_step(step, sim)
@@ -102,7 +93,6 @@ contains
         type(t_simulation), intent(inout) :: sim
         type(t_node_conf), intent(in) :: no_co
         logical :: file_exists_now, success
-        !character(len=:), allocatable :: val ! DEBUG
 
         if (mod(iteration_counter, workflow_step) == 0 .and. iteration_counter /= 0) then
             if (root(no_co)) call check_file_exists(file_exists_now)
@@ -141,19 +131,22 @@ contains
     ! <--- Change of parameters --->!
     ! <-------------------------------->!
 
-
     subroutine check_and_execute(sim, steering_exit)
         class( t_simulation ), intent(inout) :: sim
         character(len=:), allocatable :: val
         integer :: i, new_step  ! Mudamos o nome da variável para evitar conflito
         logical :: is_checkpoint_step
         logical, intent(out) :: steering_exit
+        character(len=:), allocatable :: keys(:)
 
         ! Check if current step is already a checkpoint step --> mover para baixo?
         is_checkpoint_step = if_restart_write( sim%restart, n(sim%tstep), ndump(sim%tstep), &
                                         comm(sim%no_co), sim%no_co%ngp_id() )
 
-        do i = 1, MAX_KEYS
+        ! Get the keys from the steering file
+        keys = get_keys()
+
+        do i = 1, size(keys)
             val = get_value(trim(keys(i)))
             if (len_trim(val) == 0) then
                 if ( mpi_node() == 0 ) then
@@ -190,6 +183,7 @@ contains
                     if  (.not. is_checkpoint_step .and. (val == "1")) then
                         call write_restart(sim)  ! Chama a sub-rotina de escrita de reinício 
                         steering_exit = .true.  ! Define a flag de saída
+                        exit
                     else
                         if ( mpi_node() == 0 ) then
                             print*, "DEBUG - Stop command skipped"
@@ -199,6 +193,7 @@ contains
                  case ("abort")
                     if  (val == "1") then 
                         steering_exit = .true.  ! Define a flag de saída
+                        exit
                     else
                         if ( mpi_node() == 0 ) then
                             print*, "DEBUG - Abort command skipped"
@@ -211,6 +206,10 @@ contains
                     end if
             end select
         end do
+
+        ! Free allocated memory 
+        deallocate(val)
+        deallocate(keys)
     end subroutine check_and_execute
 
     ! <-------------------------------->! DUPLICATED ROUTINE FROM MAIN MODULE
