@@ -252,14 +252,14 @@ contains
         character(len=*), intent(in) :: string
         character(len=:), allocatable, intent(out) :: identifier, command
         character(len=:), allocatable, intent(out) :: data(:)
-        logical, intent(out) :: ierr
+        integer, intent(out) :: ierr
         
         character(len=len(string)) :: working_string, temp_string
         character(len=len(string)), allocatable :: temp_data(:)
         integer :: i, n, pos, count
         
         ! Initialize outputs
-        ierr = .false.
+        ierr = 1
         if (allocated(identifier)) deallocate(identifier)
         if (allocated(command)) deallocate(command)
         if (allocated(data)) deallocate(data)
@@ -322,41 +322,39 @@ contains
             data(i) = trim(temp_data(i))
         end do
         
-        ierr = .true.
+        ierr = 0
     end subroutine parse_workflow_diagnostic
 
-    subroutine trim_diagnostic(string, trimmed_name, ierr)
-        ! Subroutine to extract base diagnostic name (removes trailing _N)
-        ! Input format: "diag_type_N" → returns "diag_type"
+   subroutine trim_diagnostic(string, trimmed_name, ierr)
         character(len=*), intent(in) :: string
-        character(len=*), intent(out) :: trimmed_name
-        logical, intent(out) :: ierr
-        
+        character(len=:), allocatable, intent(out) :: trimmed_name
+        integer, intent(out) :: ierr
+
         integer :: first_underscore, second_underscore
-        
+        character(len=:), allocatable :: temp
+
         ! Initialize outputs
         trimmed_name = ''
-        ierr = .false.
-        
+        ierr = 1
+
         ! Find first underscore
         first_underscore = index(string, '_')
-        if (first_underscore == 0) return  ! No underscores found
-        
+        if (first_underscore == 0) return
+
         ! Find second underscore (after first one)
         second_underscore = index(string(first_underscore+1:), '_')
-        
-        ! Extract appropriate portion of string
+
+        ! Extract portion of string
         if (second_underscore > 0) then
-            trimmed_name = string(1:first_underscore + second_underscore - 1)
+            temp = string(1:first_underscore + second_underscore - 1)
         else
-            trimmed_name = trim(string)
+            temp = string
         end if
-        
-        ! Remove any leading/trailing whitespace
-        trimmed_name = trim(adjustl(trimmed_name))
-        
-        ! Set success flag if we got a non-empty result
-        if (len_trim(trimmed_name) > 0) ierr = .true.
+
+        ! Remove whitespace and assign
+        trimmed_name = trim(adjustl(temp))
+
+        if (len_trim(trimmed_name) > 0) ierr = 0
     end subroutine trim_diagnostic
 
 end module m_workflow_reader

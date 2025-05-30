@@ -132,84 +132,104 @@ contains
     ! <-------------------------------->!
 
     subroutine check_and_execute(sim, steering_exit)
-        class( t_simulation ), intent(inout) :: sim
+        class(t_simulation), intent(inout) :: sim
         character(len=:), allocatable :: val
-        integer :: i, new_step  ! Mudamos o nome da variável para evitar conflito
+        integer :: i, new_step
         logical :: is_checkpoint_step
         logical, intent(out) :: steering_exit
         character(len=:), allocatable :: keys(:)
+        logical :: is_diagnostic
 
-        ! Check if current step is already a checkpoint step --> mover para baixo?
-        is_checkpoint_step = if_restart_write( sim%restart, n(sim%tstep), ndump(sim%tstep), &
-                                        comm(sim%no_co), sim%no_co%ngp_id() )
+        ! Diagnostic variables
+        integer :: diagnostic_ierr
+        character(len=:), allocatable :: diagnostic_name
+        character(len=:), allocatable :: identifier
+        character(len=:), allocatable :: diag_command
+        character(len=:), allocatable :: diag_data(:)
 
-        ! Get the keys from the steering file
+        ! Check checkpoint status
+        is_checkpoint_step = if_restart_write(sim%restart, n(sim%tstep), ndump(sim%tstep), &
+                            comm(sim%no_co), sim%no_co%ngp_id())
+
         keys = get_keys()
 
         do i = 1, size(keys)
             val = get_value(trim(keys(i)))
             if (len_trim(val) == 0) then
-                if ( mpi_node() == 0 ) then
-                    print *, "DEBUG - No value found for ", trim(keys(i))
-                end if
-                ! Skip iteration if no value is found
+                if (mpi_node() == 0) print *, "DEBUG - No value for ", trim(keys(i))
                 cycle
             end if
 
+            is_diagnostic = .false.
+
             select case (trim(keys(i)))
                 case ("checkpoint")
-                    if  (.not. is_checkpoint_step .and. (val == "1")) then
-                        call write_restart(sim)  ! Chama a sub-rotina de escrita de reinício               
-                    else
-                        if ( mpi_node() == 0 ) then
-                            print*, "DEBUG - Checkpoint command skipped due to existing checkpoint"
-                        end if
+                    if (.not. is_checkpoint_step .and. val == "1") then
+                        call write_restart(sim)
+                    else if (mpi_node() == 0) then
+                        print*, "DEBUG - Checkpoint skipped (existing checkpoint)"
                     end if
 
                 case ("restart")
-                    if ( mpi_node() == 0 .and. (val == "1") ) then
+                    if (mpi_node() == 0 .and. val == "1") &
                         print*, "DEBUG - Restart command found"
-                    end if
-                    ! Implementar lógica de reinício
 
                 case ("steering_step") 
-                    read(val, *) new_step  ! Usamos variável diferente
+                    read(val, *) new_step
                     call set_workflow_step(new_step, sim)
-                    if ( mpi_node() == 0 ) then
-                        print*, "DEBUG - Steering step changed* to ", new_step
-                    end if
+                    if (mpi_node() == 0) print*, "DEBUG - Steering step changed to ", new_step
                 
                 case ("stop")
-                    if  (.not. is_checkpoint_step .and. (val == "1")) then
-                        call write_restart(sim)  ! Chama a sub-rotina de escrita de reinício 
-                        steering_exit = .true.  ! Define a flag de saída
+                    if (.not. is_checkpoint_step .and. val == "1") then
+                        call write_restart(sim)
+                        steering_exit = .true.
                         exit
-                    else
-                        if ( mpi_node() == 0 ) then
-                            print*, "DEBUG - Stop command skipped"
-                        end if
+                    else if (mpi_node() == 0) then
+                        print*, "DEBUG - Stop command skipped"
                     end if
                 
-                 case ("abort")
-                    if  (val == "1") then 
-                        steering_exit = .true.  ! Define a flag de saída
+                case ("abort")
+                    if (val == "1") then 
+                        steering_exit = .true.
                         exit
-                    else
-                        if ( mpi_node() == 0 ) then
-                            print*, "DEBUG - Abort command skipped"
-                        end if
+                    else if (mpi_node() == 0) then
+                        print*, "DEBUG - Abort command skipped"
                     end if
 
                 case default
-                    if ( mpi_node() == 0 ) then
-                        print *, "Unknown command", trim(keys(i))
+                    call trim_diagnostic(trim(keys(i)), diagnostic_name, diagnostic_ierr)
+                    if (diagnostic_ierr == 0) then
+                        select case (diagnostic_name)
+                            case ("diag_current")
+                                call parse_workflow_diagnostic(val, identifier, diag_command, diag_data, diagnostic_ierr)
+                                if (mpi_node() == 0) then
+                                    print *, "DEBUG - identifier = ", identifier
+                                    if (allocated(diag_command)) print *, "DEBUG - command = ", trim(diag_command)
+                                    if (allocated(diag_data) .and. size(diag_data) >= 3) &
+                                        print *,  diag_data(1)
+                                        print *,  diag_data(2)
+                                        print *,  diag_data(3)
+                                end if
+                            
+                            case ("diag_emf", "diag_neutral", "diag_species")
+                                if (mpi_node() == 0) &
+                                    print *, "DEBUG - ", trim(diagnostic_name), " command found"
+                                    
+                            case default
+                                if (mpi_node() == 0) &
+                                    print *, "Unknown command: ", trim(diagnostic_name)
+                        end select
                     end if
             end select
         end do
 
-        ! Free allocated memory 
-        deallocate(val)
-        deallocate(keys)
+        ! Cleanup -> Be careful to deallocare only after assigning value 
+        if (allocated(val)) deallocate(val)
+        if (allocated(keys)) deallocate(keys)
+        if (allocated(diag_command)) deallocate(diag_command)
+        if (allocated(diag_data)) deallocate(diag_data)
+        if (allocated(identifier)) deallocate(identifier)
+        if (allocated(diagnostic_name)) deallocate(diagnostic_name)
     end subroutine check_and_execute
 
     ! <-------------------------------->! DUPLICATED ROUTINE FROM MAIN MODULE
