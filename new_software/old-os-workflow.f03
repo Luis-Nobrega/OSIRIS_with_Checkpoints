@@ -45,47 +45,26 @@ contains
         end if
     end subroutine set_workflow_step
 
-    subroutine check_file_exists(filename, file_exists, file_size, file_content)
+    subroutine check_file_exists(file_ok)
         implicit none
-        character(len=*), intent(in) :: filename
-        logical, intent(out) :: file_exists
-        integer, intent(out) :: file_size
-        character(:), allocatable, intent(out) :: file_content  ! Will hold raw bytes
+        logical, intent(out) :: file_ok
+        logical :: exists
         integer :: iunit, ierr
 
-        ! Check if file exists and get its size
-        inquire(file=filename, exist=file_exists, size=file_size)
+        inquire(file=filename, exist=exists)
 
-        if (file_exists) then
-            ! Allocate buffer to hold file content
-            allocate(character(file_size) :: file_content)
-
-            ! Open file in binary/stream mode to read raw bytes
-            open(newunit=iunit, file=filename, access='stream', form='unformatted', &
-                status='old', action='read', iostat=ierr)
-
+        if (exists) then
+            open(newunit=iunit, file=filename, status='old', iostat=ierr)
             if (ierr == 0) then
-                ! Read entire file into the buffer
-                read(iunit, iostat=ierr) file_content
                 close(iunit)
-
-                if (ierr /= 0) then
-                    deallocate(file_content)
-                    file_exists = .false.
-                    file_size = -1
-                    print*, "Error reading file content. I/O error code: ", ierr
-                else
-                    print*, "Successfully read file. Size (bytes): ", file_size
-                end if
+                file_ok = .true.
+                print*, "File exists and is readable"
             else
-                deallocate(file_content)
-                file_exists = .false.
-                file_size = -1
+                file_ok = .false.
                 print*, "File could not be opened. I/O error code: ", ierr
             end if
         else
-            file_size = -1
-            print*, "File does not exist: ", trim(filename)
+            file_ok = .false.
         end if
     end subroutine check_file_exists
 
@@ -114,39 +93,20 @@ contains
         type(t_simulation), intent(inout) :: sim
         type(t_node_conf), intent(in) :: no_co
         logical :: file_exists_now, success
-        integer :: file_size, ierr
-        character(:), allocatable :: file_content  ! Removed intent(out) as it's local
-        
-        if (mod(iteration_counter, workflow_step) == 0 .and. iteration_counter /= 0) then
-            ! if root, read the steering file and get the size in bytes
-            if (root(no_co)) then
-                call check_file_exists(filename, file_exists_now, file_size, file_content)
-            end if
-            
-            ! Broadcast file existence status and the file size
-            call MPI_BCAST(file_exists_now, 1, MPI_LOGICAL, 0, no_co%comm, ierr) 
-            call MPI_BCAST(file_size, 1, MPI_INTEGER, 0, no_co%comm, ierr) 
 
-            if (file_exists_now .and. file_size > 0) then
-                ! Allocate space for content on non-root processes
-                if (.not. root(no_co)) allocate(character(len=file_size) :: file_content)
-                
-                ! Broadcast file content
-                if (file_size > 0) then
-                    call MPI_BCAST(file_content, file_size, MPI_CHARACTER, 0, no_co%comm, ierr)
-                    if (ierr /= 0) then
-                        file_ok = .false.
-                        if (allocated(file_content)) deallocate(file_content)
-                        return
-                    end if
-                end if
-                
-                ! parse the file content
-                call read_steering_file(no_co, file_content, ierr)
-                
+        if (mod(iteration_counter, workflow_step) == 0 .and. iteration_counter /= 0) then
+            if (root(no_co)) call check_file_exists(file_exists_now)
+            call MPI_BCAST(file_exists_now, 1, MPI_LOGICAL, 0, no_co%comm, ierr)
+
+            if (file_exists_now) then
+                call read_steering_file(no_co, ierr)
+                !val = get_value("simulation_name") ! DEBUG
+                !print *, "DEBUG - simulation_name value: ", trim(val) ! DEBUG
                 if (ierr == 0) then
+                    !print *, "DEBUG - Leu com sucesso"
                     if (root(no_co)) then
                         call rename_file(filename, used_filename, success)
+                        !if (success) print *, "DEBUG - Rename com sucesso"
                     end if
                     file_ok = .true.
                     call check_and_execute(sim, steering_exit)
@@ -162,7 +122,9 @@ contains
 
         iteration_counter = iteration_counter + 1
 
-        if (allocated(file_content)) deallocate(file_content)
+        !!! VER se vale a pena meter aqui uma flag 
+        ! que manda fazer barrier sse o workflow_actions 
+        ! Fizer alguma alteração à simulação 
     end subroutine check_workflow_step
 
     ! <-------------------------------->!

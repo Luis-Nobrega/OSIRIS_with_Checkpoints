@@ -7,8 +7,8 @@ module m_workflow_reader !*!
     private
 
     ! Public interfaces
-    public :: read_steering_file, get_value, get_size, steering_filename, get_keys ! for reading the steering file
-    public :: parse_workflow_diagnostic, trim_diagnostic ! for diagnostics
+    public :: read_steering_file, get_value, get_size, steering_filename, get_keys
+    public :: parse_workflow_diagnostic, trim_diagnostic
 
     ! Internal storage type
     type :: term_value_pair
@@ -24,7 +24,6 @@ module m_workflow_reader !*!
         procedure :: add => add_or_update_term
         procedure :: get => get_term_value
         procedure :: size => collection_size
-        procedure :: broadcast => broadcast_collection
     end type term_value_collection
 
     ! Single collection instance
@@ -33,66 +32,64 @@ module m_workflow_reader !*!
 
 contains
 
-    subroutine read_steering_file(no_co, iostat)
+    ! New version that takes raw file content
+    subroutine read_steering_file(no_co, file_content, iostat)
         type(t_node_conf), intent(in), target :: no_co
+        character(len=*), intent(in) :: file_content  ! Raw file content
         integer, intent(out), optional :: iostat
-        integer :: unit, io_stat, ierr
-
+        integer :: io_stat = 0
+        
         collection%no_co => no_co
-
-        if (root(no_co)) then
-            open(newunit=unit, file=steering_filename, status='old', action='read', iostat=io_stat)
-            if (io_stat /= 0) then
-                print *, "Error opening steering file: ", trim(steering_filename), " iostat=", io_stat
-                if (present(iostat)) iostat = io_stat
-                return
-            endif
-
-            call read_key_value_lines(unit, process_pair, io_stat)
-            !print *, "DEBUG - io_stat do read_key_value_lines: ", io_stat
-            close(unit)  ! Close after reading is done
-        endif
-
-        ! Broadcast the read status to all processes
-        call MPI_BCAST(io_stat, 1, MPI_INTEGER, 0, no_co%comm, ierr)
-
-        ! Only broadcast the collection if the read was successful
-        if (io_stat == 0) then
-            call collection%broadcast(no_co%comm)
-            !print *, "DEBUG - Broadcasted collection"
-        endif
-
+        
+        ! Reset collection before parsing new content
+        if (allocated(collection%pairs)) deallocate(collection%pairs)
+        collection%count = 0
+        
+        ! All processes parse the file content independently
+        call parse_steering_data(file_content, io_stat)
+        
         if (present(iostat)) iostat = io_stat
     end subroutine read_steering_file
 
-    subroutine broadcast_collection(this, comm)
-        class(term_value_collection), intent(inout) :: this
-        integer, intent(in) :: comm
-        integer :: i, term_len, value_len, ierr
+    subroutine parse_steering_data(file_content, iostat)
+        character(len=*), intent(in) :: file_content
+        integer, intent(out) :: iostat
+        integer :: pos, eq_pos, line_end, line_num
+        character(len=:), allocatable :: line, key, value
+        logical :: success
 
-        call MPI_BCAST(this%count, 1, MPI_INTEGER, 0, comm, ierr)
+        iostat = 0
+        pos = 1
+        line_num = 0
 
-        if (.not. root(this%no_co) .and. .not. allocated(this%pairs)) then
-            allocate(this%pairs(this%count))
-        endif
+        do while (pos <= len(file_content))
+            ! Find end of line
+            line_end = index(file_content(pos:), new_line('A'))
+            if (line_end == 0) line_end = len(file_content) - pos + 2
+            
+            ! Extract line
+            line = file_content(pos:pos+line_end-2)
+            pos = pos + line_end
+            line_num = line_num + 1
 
-        do i = 1, this%count
-            if (root(this%no_co)) then
-                term_len = len(this%pairs(i)%term)
-                value_len = len(this%pairs(i)%value)
+            ! Skip empty lines and comments
+            if (len_trim(line) == 0) cycle
+            if (line(1:1) == '!') cycle
+
+            ! Find key-value pair
+            eq_pos = index(line, '=')
+            if (eq_pos == 0) then
+                ! ignore line if no '=' found
+                cycle
             endif
-            call MPI_BCAST(term_len, 1, MPI_INTEGER, 0, comm, ierr)
-            call MPI_BCAST(value_len, 1, MPI_INTEGER, 0, comm, ierr)
 
-            if (.not. root(this%no_co)) then
-                this%pairs(i)%term  = repeat(' ', term_len)
-                this%pairs(i)%value = repeat(' ', value_len)
-            endif
+            key = adjustl(trim(line(1:eq_pos-1)))
+            value = adjustl(trim(line(eq_pos+1:)))
 
-            call MPI_BCAST(this%pairs(i)%term, term_len, MPI_CHARACTER, 0, comm, ierr)
-            call MPI_BCAST(this%pairs(i)%value, value_len, MPI_CHARACTER, 0, comm, ierr)
+            ! Store in collection
+            call collection%add(key, value)
         end do
-    end subroutine broadcast_collection
+    end subroutine parse_steering_data
 
     function get_value(key) result(value)
         character(len=*), intent(in) :: key
