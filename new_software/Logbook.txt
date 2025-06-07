@@ -1,0 +1,12 @@
+To do: 
+
+- Testar versão aprovada pelo Ricardo : DONE
+
+- Testar versão no Deucalion : DONE
+
+- Mudar tempo final da simulação : 
+
+- Descobrir como mudar ndumpfac : VER FOLHA de apontamentos 
+- Mudar perfil do plasma depois da moving window : ? 
+- Falar com Maria oara a cena dos lasers a colidirem : ?
+- Adicionar forma de desligar minha parte do código ao compilar com #IFDEF : ? 

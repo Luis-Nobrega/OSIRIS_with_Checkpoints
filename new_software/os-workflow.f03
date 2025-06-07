@@ -10,7 +10,9 @@ module m_workflow !*!
     use m_restart !^!
     use m_logprof !^!
     use m_time_step       !^! Para a função n()
+    use m_time !^! Para a função t()
     use m_node_conf       !^! Para a função comm()
+    use stringutil !^! Para converter strings para integers
 
     implicit none
 
@@ -176,7 +178,7 @@ contains
         logical :: is_checkpoint_step
         logical, intent(out) :: steering_exit
         character(len=:), allocatable :: keys(:)
-        logical :: is_diagnostic
+        integer :: ierr
 
         ! Diagnostic variables
         integer :: diagnostic_ierr
@@ -198,7 +200,7 @@ contains
                 cycle
             end if
 
-            is_diagnostic = .false.
+            ierr = 0
 
             select case (trim(keys(i)))
                 case ("checkpoint")
@@ -208,7 +210,12 @@ contains
                         print*, "DEBUG - Checkpoint skipped (existing checkpoint)"
                     end if
 
+                 case ("tmax")
+                    ! Convert to double, check if bigger than current time 
+                    call set_max_time(sim, get_value(trim(keys(i))) , ierr)
+
                 case ("restart")
+                    ! IN PROGRESS
                     if (mpi_node() == 0 .and. val == "1") &
                         print*, "DEBUG - Restart command found"
 
@@ -242,11 +249,11 @@ contains
                                 call parse_workflow_diagnostic(val, identifier, diag_command, diag_data, diagnostic_ierr)
                                 if (mpi_node() == 0) then
                                     print *, "DEBUG - identifier = ", identifier
-                                    if (allocated(diag_command)) print *, "DEBUG - command = ", trim(diag_command)
-                                    if (allocated(diag_data) .and. size(diag_data) >= 3) &
-                                        print *,  diag_data(1)
-                                        print *,  diag_data(2)
-                                        print *,  diag_data(3)
+                                    !if (allocated(diag_command)) print *, "DEBUG - command = ", trim(diag_command)
+                                    !if (allocated(diag_data) .and. size(diag_data) >= 3) &
+                                    !    print *,  diag_data(1)
+                                    !    print *,  diag_data(2)
+                                    !    print *,  diag_data(3)
                                 end if
                             
                             case ("diag_emf", "diag_neutral", "diag_species")
@@ -259,6 +266,9 @@ contains
                         end select
                     end if
             end select
+
+            ! SEE WHETHER TO BCAST IERR FOR SYNCRONIZARION ??????????????????????????????????????
+
         end do
 
         ! Cleanup -> Be careful to deallocare only after assigning value 
@@ -313,5 +323,50 @@ contains
         call end_event(restart_write_ev)
 
         end subroutine write_restart
+        
+        ! <-------------------------------->! 
+
+        subroutine set_max_time(sim, val, ierr)
+        implicit none
+
+        class(t_simulation), intent(inout) :: sim
+        character(len=*), intent(in) :: val
+        integer, intent(out) :: ierr
+
+        real(p_double) :: updated_tmax
+        integer :: conv_ierr
+
+        ierr = 0
+
+        updated_tmax = strtodouble(val, conv_ierr)
+
+        if (updated_tmax == 0.0d0 .or. updated_tmax < 0.0d0) then
+            ierr = 1
+            if (mpi_node() == 0) then
+                print*, "DEBUG - Tmax setting skipped", trim(val)
+            end if
+            return
+        end if
+
+        if (conv_ierr == 0) then
+            ! Use a função pública para obter o tempo atual
+            if (updated_tmax > t(sim%time)) then
+                call set_tmax(sim%time, updated_tmax)  ! Você precisa implementar essa rotina
+                if (mpi_node() == 0) then
+                    print*, "DEBUG - Updated tmax to ", tmax(sim%time)
+                end if
+            else if (mpi_node() == 0) then
+                print*, "DEBUG - tmax not updated, new value ", updated_tmax, &
+                        " is not larger than current time ", t(sim%time)
+            end if
+        else
+            ierr = 1
+            if (mpi_node() == 0) then
+                print*, "DEBUG - Error converting tmax value: ", trim(val)
+            end if
+        end if
+
+    end subroutine set_max_time
+
 
 end module m_workflow

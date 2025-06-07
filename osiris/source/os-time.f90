@@ -65,12 +65,16 @@ interface t
   module procedure t
 end interface
 
+interface set_tmax !*!
+  module procedure set_tmax
+end interface !*!
+
 !       declare things that should be public
 public :: t_time, read_nml, setup
 public :: restart_write
 public :: update, test
 public :: tmin, tmax, t
-
+public :: set_tmax !*!
 
 contains 
 
@@ -276,6 +280,21 @@ this%t = this%tmin + n*dt
 end subroutine update_time
 !---------------------------------------------------
 
+
+!---------------------------------------------------
+subroutine set_tmax( this, new_tmax ) !*!
+!---------------------------------------------------
+!  set the maximum time (for steering) 
+!---------------------------------------------------
+
+  implicit none
+
+  type( t_time ), intent( inout )  ::  this
+  real(p_double), intent(in) :: new_tmax
+  this%tmax = new_tmax
+
+  end subroutine set_tmax !*!
+!---------------------------------------------------
 
 
 !---------------------------------------------------
