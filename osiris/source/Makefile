@@ -87,9 +87,13 @@ include particles/Makefile
 src += os-simulation.f03 os-dynloadbalance.f03
 
 # new particle code for steering 
-src += os-workflow_reader.f03 # !*!
-src += os-workflow.f03 # !*!
-# src += os-workflow_actions.f03 # !*!
+ifeq ($(DISABLE_STEERING),1)
+    $(info NOTE: Steering module is DISABLED)
+else
+    FPPF += -D__STEERING__
+    src += os-workflow_reader.f03 # !*!
+    src += os-workflow.f03 # !*!
+endif
 
 # SIMD code
 include simd/Makefile

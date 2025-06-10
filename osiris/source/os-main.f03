@@ -212,7 +212,10 @@ subroutine run_sim( sim )
   use m_time
   use m_restart
   use m_dynamic_loadbalance
-  use m_workflow !*!
+
+  #ifdef __STEERING__
+    use m_workflow !*!
+  #endif
   ! use m_workflow_reader !*!
   ! use m_workflow_actions !*!
 
@@ -224,7 +227,9 @@ subroutine run_sim( sim )
   
   ! --
   ! To define the frequency of the workflow step
-  call set_workflow_step(steering_step(sim%tstep), sim) !*! 
+  #ifdef __STEERING__
+    call set_workflow_step(steering_step(sim%tstep), sim) !*! 
+  #endif
   
 
   if ( root(sim%no_co) ) then
@@ -274,8 +279,9 @@ subroutine run_sim( sim )
     file_ok = .false. 
 
     !*! check if a file should be read by the root node 
-
-     call check_workflow_step(file_ok, sim, sim%no_co, steering_exit) !*!
+    #ifdef __STEERING__
+      call check_workflow_step(file_ok, sim, sim%no_co, steering_exit) !*!
+    #endif
 
      if (steering_exit) then
        if ( root(sim%no_co) ) then

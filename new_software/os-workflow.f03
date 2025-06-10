@@ -211,20 +211,22 @@ contains
                     end if
 
                  case ("tmax")
-                    ! Convert to double, check if bigger than current time 
+                    ! Change the simulation maximum time
                     call set_max_time(sim, get_value(trim(keys(i))) , ierr)
 
                 case ("restart")
-                    ! IN PROGRESS
+                    ! IN PROGRESS ????????????????????????????????????'''
                     if (mpi_node() == 0 .and. val == "1") &
                         print*, "DEBUG - Restart command found"
 
                 case ("steering_step") 
+                    ! Change the steering step. This is absolute frequency! 
                     read(val, *) new_step
                     call set_workflow_step(new_step, sim)
                     if (mpi_node() == 0) print*, "DEBUG - Steering step changed to ", new_step
                 
                 case ("stop")
+                    ! Output restart files and stop the simulation
                     if (.not. is_checkpoint_step .and. val == "1") then
                         call write_restart(sim)
                         steering_exit = .true.
@@ -242,18 +244,16 @@ contains
                     end if
 
                 case default
+                    ! Handle diagnostics 
                     call trim_diagnostic(trim(keys(i)), diagnostic_name, diagnostic_ierr)
                     if (diagnostic_ierr == 0) then
                         select case (diagnostic_name)
+
+                            ! THIS PART IS CURRENTLY USELESS
                             case ("diag_current")
                                 call parse_workflow_diagnostic(val, identifier, diag_command, diag_data, diagnostic_ierr)
                                 if (mpi_node() == 0) then
                                     print *, "DEBUG - identifier = ", identifier
-                                    !if (allocated(diag_command)) print *, "DEBUG - command = ", trim(diag_command)
-                                    !if (allocated(diag_data) .and. size(diag_data) >= 3) &
-                                    !    print *,  diag_data(1)
-                                    !    print *,  diag_data(2)
-                                    !    print *,  diag_data(3)
                                 end if
                             
                             case ("diag_emf", "diag_neutral", "diag_species")
@@ -263,6 +263,7 @@ contains
                             case default
                                 if (mpi_node() == 0) &
                                     print *, "Unknown command: ", trim(diagnostic_name)
+                            ! THIS PART IS CURRENTLY USELESS
                         end select
                     end if
             end select
@@ -324,7 +325,7 @@ contains
 
         end subroutine write_restart
         
-        ! <-------------------------------->! 
+        !<-------------------------------->! 
 
         subroutine set_max_time(sim, val, ierr)
         implicit none
@@ -368,5 +369,13 @@ contains
 
     end subroutine set_max_time
 
+    !<-------------------------------->! 
+
+    ! CONVERTER CASE DEFAULT DE CIMA PARA UMA SUBROTINA POR FAVOR
+    subroutine process_diagnostics()
+        implicit none
+        print*, "DEBUG - TEST"
+        
+    end subroutine process_diagnostics
 
 end module m_workflow
