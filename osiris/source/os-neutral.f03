@@ -172,8 +172,8 @@ integer, parameter :: p_vap_ion_level = 3
 ! http://physics.nist.gov/cuu/Constants/
 !
 ! NIST Atomic Spectra Database Ionization Energies Data
-! Kramida, A., Ralchenko, Yu., Reader, J., and NIST ASD Team (2014). NIST Atomic Spectra
-! Database (ver. 5.2), [Online]. Available: http://physics.nist.gov/asd [2014, December].
+! Kramida,ï¿½A., Ralchenko,ï¿½Yu., Reader,ï¿½J., and NIST ASD Team (2014). NIST Atomic Spectra
+! Database (ver.ï¿½5.2), [Online]. Available: http://physics.nist.gov/asd [2014, December].
 
 ! National Institute of Standards and Technology, Gaithersburg, MD
 !

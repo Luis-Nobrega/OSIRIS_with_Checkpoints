@@ -14,6 +14,10 @@ module m_workflow !*!
     use m_node_conf       !^! Para a função comm()
     use stringutil !^! Para converter strings para integers
 
+    use m_vdf_report  !?
+    use m_vdf_define  !?
+    use m_emf_diag
+
     implicit none
 
     private
@@ -186,6 +190,7 @@ contains
         character(len=:), allocatable :: identifier
         character(len=:), allocatable :: diag_command
         character(len=:), allocatable :: diag_data(:)
+        integer, allocatable :: diag_data_int(:)
 
         ! Check checkpoint status
         is_checkpoint_step = if_restart_write(sim%restart, n(sim%tstep), ndump(sim%tstep), &
@@ -215,7 +220,7 @@ contains
                     call set_max_time(sim, get_value(trim(keys(i))) , ierr)
 
                 case ("restart")
-                    ! IN PROGRESS ????????????????????????????????????'''
+                    ! IN PROGRESS ????????????????????????????????????
                     if (mpi_node() == 0 .and. val == "1") &
                         print*, "DEBUG - Restart command found"
 
@@ -251,12 +256,37 @@ contains
 
                             ! THIS PART IS CURRENTLY USELESS
                             case ("diag_current")
+                            !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
                                 call parse_workflow_diagnostic(val, identifier, diag_command, diag_data, diagnostic_ierr)
                                 if (mpi_node() == 0) then
                                     print *, "DEBUG - identifier = ", identifier
                                 end if
+
+                            case ("diag_emf")
+
+                                call parse_workflow_diagnostic(val, identifier, diag_command, diag_data, diagnostic_ierr)
+
+                                if (diagnostic_ierr == 0) then
+                                    ! Convert string array to integer array 
+                                    call str_array_to_int(diag_data, diag_data_int, ierr)
+                                    if (ierr == 0) then
+                                        call steering_emf_diag(sim, trim(diag_command), trim(identifier), diag_data_int, ierr)
+                                    end if
+                                end if
+            
+                            ! Desalocar apenas se alocado
+                            if (allocated(diag_data_int)) deallocate(diag_data_int)
                             
-                            case ("diag_emf", "diag_neutral", "diag_species")
+                            !call steering_emf_diag(sim, "ndump_fac", "global", [10], ierr)
+                            !call steering_emf_diag(sim, "n_ave", "e3", [4,4,4], ierr)
+                            !call steering_emf_diag(sim, "gipos", "e2, line, x1, 64, 96", [128,128], ierr)
+                            !call steering_emf_diag(sim, "ndump_fac_ene_int", "global", [20], ierr)
+
+                            case ("diag_neutral")
+                            !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+                            case ("diag_species")
+                            !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
                                 if (mpi_node() == 0) &
                                     print *, "DEBUG - ", trim(diagnostic_name), " command found"
                                     
@@ -272,13 +302,14 @@ contains
 
         end do
 
-        ! Cleanup -> Be careful to deallocare only after assigning value 
+        ! Cleanup -> Be careful to deallocate only after assigning value 
         if (allocated(val)) deallocate(val)
         if (allocated(keys)) deallocate(keys)
         if (allocated(diag_command)) deallocate(diag_command)
         if (allocated(diag_data)) deallocate(diag_data)
         if (allocated(identifier)) deallocate(identifier)
         if (allocated(diagnostic_name)) deallocate(diagnostic_name)
+        if (allocated(diag_data_int)) deallocate(diag_data_int)
     end subroutine check_and_execute
 
     ! <-------------------------------->! DUPLICATED ROUTINE FROM MAIN MODULE
@@ -369,13 +400,203 @@ contains
 
     end subroutine set_max_time
 
-    !<-------------------------------->! 
+    !<------------------------------------------------------->!
 
-    ! CONVERTER CASE DEFAULT DE CIMA PARA UMA SUBROTINA POR FAVOR
-    subroutine process_diagnostics()
+    subroutine str_array_to_int(str_array, int_array, ierr)
         implicit none
-        print*, "DEBUG - TEST"
+        ! Inputs
+        character(len=:), allocatable, intent(in)  :: str_array(:)
+        ! Outputs
+        integer, allocatable, intent(out)          :: int_array(:)
+        integer, intent(out)                       :: ierr
+
+        ! Locals
+        integer :: i, n, conv_ierr
+
+        n = size(str_array)
+        allocate(int_array(n))
+
+        do i = 1, n
+            int_array(i) = strtoint(str_array(i), conv_ierr)
+            if (conv_ierr /= 0) then
+                ierr = conv_ierr
+                return
+            end if
+        end do
+
+        ierr = 0
+    end subroutine str_array_to_int
+
+    !<------------------------------------------------------->! 
+    !                 DIAGNOSTICS HANDLER
+    ! All functions to handle diagnostics will be here
+    !<------------------------------------------------------->! 
+
+    !-----------------------------------------------------------------------------------------
+    !       Change emf parameters through steering file
+    !-----------------------------------------------------------------------------------------
+    subroutine steering_emf_diag(sim, command_name, report_spec, new_value, ierr)      
+        implicit none
         
-    end subroutine process_diagnostics
+        ! Argumentos
+        class(t_simulation), intent(inout) :: sim
+        character(*), intent(in) :: command_name      ! Nome do comando (ex: "ndump_fac", "n_ave", etc.)
+        character(*), intent(in) :: report_spec       ! Especificação do relatório (ex: "e3", "e2, line, x1, 64, 96")
+        integer, dimension(:), intent(in) :: new_value ! Novo valor (pode ser escalar ou array)
+        integer, intent(out) :: ierr                  ! Código de erro (0 = sucesso)
+        
+        ! Variáveis locais
+        type(t_diag_emf), pointer :: diag_emf
+        type(t_vdf_report), pointer :: report
+        type(t_vdf_report_item), pointer :: item
+        character(len=:), allocatable :: quant, details
+        integer :: pos, item_type, direction, id
+        logical :: found, is_tavg
+        integer, dimension(2) :: gipos
+        
+        ! Inicializa ponteiros e variáveis
+        ierr = 0
+        diag_emf => sim%emf%diag
+        report => diag_emf%reports
+        
+        ! Passo 1: Parse da especificação do relatório
+        pos = index(report_spec, ',')
+        if (pos > 0) then
+            quant = trim(adjustl(report_spec(1:pos-1)))
+            details = trim(adjustl(report_spec(pos+1:)))
+        else
+            quant = trim(adjustl(report_spec))
+            details = ""
+        end if
+        
+        ! Passo 2: Encontrar o relatório principal (quantidade)
+        found = .false.
+        do while (associated(report) .and. .not. found)
+            if (trim(report%name) == quant) then
+                found = .true.
+                exit
+            end if
+            report => report%next
+        end do
+        
+        if (.not. found) then
+            ierr = -1  ! Relatório não encontrado
+            return
+        end if
+        
+        ! Passo 3: Parse dos detalhes (se existirem)
+        item_type = -1
+        direction = -1
+        gipos = -1
+        is_tavg = .false.
+        id = -1
+        
+        if (len_trim(details) > 0) then
+            ! Parse dos componentes
+            if (index(details, 'tavg') > 0) is_tavg = .true.
+            if (index(details, 'savg') > 0) item_type = p_savg
+            if (index(details, 'senv') > 0) item_type = p_senv
+            if (index(details, 'line') > 0) item_type = p_line
+            if (index(details, 'slice') > 0) item_type = p_slice
+            
+            ! Parse de direção e posições
+            if (index(details, 'x1') > 0) direction = 1
+            if (index(details, 'x2') > 0) direction = 2
+            if (index(details, 'x3') > 0) direction = 3
+            
+            ! Extrair posições (ex: "64, 96")
+            ! (Implementação simplificada - em produção usar split mais robusto)
+            if (item_type == p_line .or. item_type == p_slice) then
+                pos = index(details, ',', back=.true.)
+                if (pos > 0) then
+                    read(details(pos+1:), *) gipos(1)
+                    if (item_type == p_line) then
+                        pos = index(details(1:pos-1), ',', back=.true.)
+                        if (pos > 0) read(details(pos+1:), *) gipos(2)
+                    end if
+                end if
+            end if
+        end if
+        
+       ! Passo 4: Encontrar item específico
+        if (item_type > 0) then
+            found = .false.
+            item => report%list
+            do while (associated(item) .and. .not. found)
+                if (item%type == item_type) then
+                    if (item_type == p_line .or. item_type == p_slice) then
+                        ! Corrigido: usar .eqv. para lógicos
+                        if (item%direction == direction .and. &
+                            all(item%gipos == gipos) .and. &
+                            item%tavg .eqv. is_tavg) then
+                            found = .true.
+                            exit
+                        end if
+                    else
+                        ! Corrigido: usar .eqv. para lógicos
+                        if (item%tavg .eqv. is_tavg) then
+                            found = .true.
+                            exit
+                        end if
+                    end if
+                end if
+                item => item%next
+            end do
+        end if
+        
+        ! Passo 5: Aplicar modificações conforme o comando
+        select case (trim(command_name))
+            ! Comandos globais (afetam todo o relatório)
+            case ("ndump_fac")
+                report%ndump(p_full) = new_value(1)
+            case ("ndump_fac_ave")
+                report%ndump(p_savg) = new_value(1)
+                report%ndump(p_senv) = new_value(1)
+            case ("ndump_fac_lineout")
+                report%ndump(p_line) = new_value(1)
+                report%ndump(p_slice) = new_value(1)
+            
+            ! Comandos para itens específicos
+            case ("n_ave")
+                if (size(new_value) >= 3) then
+                    report%n_ave(1:3) = new_value(1:3)
+                else
+                    ierr = -3  ! Tamanho inválido
+                end if
+            case ("n_tavg")
+                report%n_tavg = new_value(1)
+            case ("gipos")
+                if (associated(item) .and. size(new_value) >= size(item%gipos)) then
+                    item%gipos = new_value(1:size(item%gipos))
+                else
+                    ierr = -4  ! Item inválido ou tamanho incorreto
+                end if
+            
+            ! Comandos para parâmetros globais do diag_emf
+            case ("ndump_fac_ene_int")
+                if (diag_emf%ndump_fac_ene_int > 0) then
+                    ! This quantity can't be initialized during the simulation
+                    diag_emf%ndump_fac_ene_int = new_value(1)
+                else
+                    print *, "DEBUG - ndump_fac_ene_int not set, skipping"
+                endif
+                
+            case ("ndump_fac_charge_cons")
+                ! WARNING: This parameter currently doesn't work 
+                ! Check if flag is set 
+                if ( sim % emf % if_charge_cons( sim%tstep ) ) then
+                     diag_emf%ndump_fac_charge_cons = new_value(1)
+                else
+                    print *, "DEBUG - Charge conservation diagnostic is temporarily disabled"
+                endif
+
+            case ("prec")
+                diag_emf%prec = new_value(1)
+            
+            case default
+                ierr = -5  ! Comando desconhecido
+        end select
+        
+    end subroutine steering_emf_diag
 
 end module m_workflow

@@ -35,9 +35,16 @@ emf_bound {
 }
 
 diag_emf {
-  ndump_fac = 10,                     ! diagnostics at every 10 * 5 = 50 timesteps
+  ndump_fac = 8,                     ! diagnostics at every 10 * 5 = 50 timesteps
   reports = "b1", "b2", "b3",         ! save all magnetic field components
-}
+            "b3, senv","b3, tavg",
+            "b2, tavg, savg",
+	    "e1, line, x2, 32", 
+  n_ave(1:2) = 2,2,
+  ndump_fac_ave = 5,
+  n_tavg = 5,
+  ndump_fac_lineout = 6,
+  }
 
 particles {
   num_species = 2,                    ! Use 2 particle species
@@ -80,5 +87,5 @@ current{}
 
 diag_current {
   ndump_fac = 10,                       ! diagnostics at every 10 * 5 = 50 timesteps
-  reports = "j3",                       ! save z component of current density
+  reports = "j1",                       ! save z component of current density
 }

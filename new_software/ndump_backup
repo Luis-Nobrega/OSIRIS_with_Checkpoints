@@ -1,0 +1,69 @@
+    subroutine steering_emf_ndump(sim, command_name, report_name, new_ndump)
+
+        class(t_simulation), intent(inout) :: sim
+        type(t_vdf_report), pointer, intent(in) :: report_list = sim%emf%diag%reports
+        type ( t_diag_emf ), intent(inout) :: emf_diag = sim%emf%diag
+        character(*), intent(in) :: report_name
+        character(*), intent(in) :: command_name
+        integer, intent(in) :: new_ndump
+        
+        type(t_vdf_report), pointer :: current
+        
+        current => report_list
+
+        ! Commands that don't need to cycle the linked list
+        select case (command_name)
+
+            case ("ndump_fac_ene_int")
+                emf_diag%dump_fac_ene_int = new_ndump
+                
+
+
+                    ndump_fac_ene_int
+            case ("ndump_fac_charge_cons")
+                  emf_diag%dump_fac_ene_int = new_ndump
+
+            case ("prec")
+                emf_diag%p_diag_prec = new_ndump
+
+        end select 
+
+        ! Cycle through the linked list of reports  
+        do while (associated(current))
+            print*, "DEBUG - Current report: ", trim(current%name), &
+                " with ndump = ", current%ndump
+
+            select case (command_name)
+                case ("ndump_fac")
+                    if (trim(current%name) == trim(report_name)) then
+                        current%ndump(1) = new_ndump
+                        exit
+                    endif
+
+                case ("ndump_fac_ave")
+                    if (trim(current%name) == trim(report_name)) then
+                        current%ndump(2) = new_ndump
+                        current%ndump(3) = new_ndump
+                        exit
+                    endif
+
+                case ("ndump_fac_lineout")
+                    if (trim(current%name) == trim(report_name)) then
+                        current%ndump(4) = new_ndump
+                        current%ndump(5) = new_ndump
+                        exit
+                    endif              
+
+            end select 
+            if (trim(current%name) == trim(report_name)) then
+                current%ndump = new_ndump
+                exit
+            endif
+            current => current%next
+        enddo
+        
+        if (.not. associated(current)) then
+            print*, "DEBUG - Report not found: ", trim(report_name)
+        end if
+
+    end subroutine steering_emf_ndump
