@@ -21,6 +21,11 @@ module m_workflow !*!
     use m_emf_diag
     use m_current_define
     use m_current_diag
+    use m_neutral
+    use m_diag_neutral
+    use m_particles_define
+    use m_particles
+    
 
 
     implicit none
@@ -472,8 +477,10 @@ contains
         ! Passo 1: Parse da especificação do relatório
         pos = index(report_spec, ',')
         if (pos > 0) then
-            quant = trim(adjustl(report_spec(1:pos-1)))
-            details = trim(adjustl(report_spec(pos+1:)))
+            quant = report_spec(1:pos-1)        ! Assign substring first
+            quant = trim(adjustl(quant))        ! Then trim/adjust
+            details = report_spec(pos+1:)       ! Assign substring first
+            details = trim(adjustl(details))    ! Then trim/adjust
         else
             quant = trim(adjustl(report_spec))
             details = ""
@@ -657,8 +664,10 @@ contains
         ! Passo 1: Parse da especificação do relatório
         pos = index(report_spec, ',')
         if (pos > 0) then
-            quant = trim(adjustl(report_spec(1:pos-1)))
-            details = trim(adjustl(report_spec(pos+1:)))
+            quant = report_spec(1:pos-1)        ! Assign substring first
+            quant = trim(adjustl(quant))        ! Then trim/adjust
+            details = report_spec(pos+1:)       ! Assign substring first
+            details = trim(adjustl(details))    ! Then trim/adjust
         else
             quant = trim(adjustl(report_spec))
             details = ""
@@ -780,6 +789,7 @@ contains
     !       Remove existing emf reports
     !-----------------------------------------------------------------------------------------
     subroutine remove_current_report()
+    
 
     end subroutine remove_current_report
 
@@ -791,7 +801,5 @@ contains
     end subroutine add_current_report
 
     !<----------------------NEUTRALS------------------------------>! 
-
-    
 
 end module m_workflow

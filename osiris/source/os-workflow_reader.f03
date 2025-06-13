@@ -272,23 +272,23 @@ contains
             working_string = trim(adjustl(working_string))
         end if
         
-        ! Count commas to determine number of elements
+        ! Count semicolons to determine number of elements
         count = 1
         do i = 1, len_trim(working_string)
-            if (working_string(i:i) == ',') count = count + 1
+            if (working_string(i:i) == ';') count = count + 1
         end do
         
         ! Need at least identifier, command, and one data value
         if (count < 3) return
         
         ! First parse identifier
-        pos = index(working_string, ',')
+        pos = index(working_string, ';')
         if (pos == 0) return
         identifier = trim(adjustl(working_string(1:pos-1)))
         
         ! Then parse command
         temp_string = working_string(pos+1:)
-        pos = index(temp_string, ',')
+        pos = index(temp_string, ';')
         if (pos == 0) return
         command = trim(adjustl(temp_string(1:pos-1)))
         
@@ -296,14 +296,14 @@ contains
         temp_string = temp_string(pos+1:)
         count = 1
         do i = 1, len_trim(temp_string)
-            if (temp_string(i:i) == ',') count = count + 1
+            if (temp_string(i:i) == ';') count = count + 1
         end do
         
         ! Temporary fixed-length storage
         allocate(character(len=len(temp_string)) :: temp_data(count))
         
         do i = 1, count
-            pos = index(temp_string, ',')
+            pos = index(temp_string, ';')
             if (pos == 0) then
                 temp_data(i) = trim(adjustl(temp_string))
                 exit
