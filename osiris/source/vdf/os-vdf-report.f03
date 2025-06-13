@@ -88,6 +88,7 @@ public :: new, cleanup, report_vdf
 public :: if_report, n_avg, p_max_diag_len
 public :: if_add_tavg_data, add_tavg_data
 public :: report_line, report_slice
+public :: add_report !*! Will be used in steering module to add reports
 
 interface alloc
   module procedure alloc_vdf_report

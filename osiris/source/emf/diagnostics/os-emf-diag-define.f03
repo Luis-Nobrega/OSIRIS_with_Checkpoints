@@ -466,5 +466,4 @@ subroutine init_report_quants_emf( this )
 
 end subroutine init_report_quants_emf
 
-
 end module m_emf_diag

@@ -25,6 +25,8 @@ module m_workflow !*!
     use m_diag_neutral
     use m_particles_define
     use m_particles
+
+    use m_emf_define ! para o p_extfld_none
     
 
 
@@ -272,7 +274,8 @@ contains
                                     ! Convert string array to integer array 
                                     call str_array_to_int(diag_data, diag_data_int, ierr)
                                     if (ierr == 0) then
-                                        call steering_current_diag(sim, trim(diag_command), trim(identifier), diag_data_int, ierr)
+                                        call add_current_report(sim, trim(identifier))
+                                        call steering_current_diag(sim, trim(identifier), trim(diag_command), diag_data_int, ierr)
                                     end if
                                 end if
             
@@ -287,7 +290,8 @@ contains
                                     ! Convert string array to integer array 
                                     call str_array_to_int(diag_data, diag_data_int, ierr)
                                     if (ierr == 0) then
-                                        call steering_emf_diag(sim, trim(diag_command), trim(identifier), diag_data_int, ierr)
+                                        call add_emf_report(sim, trim(identifier))
+                                        call steering_emf_diag(sim, trim(identifier), trim(diag_command), diag_data_int, ierr)
                                     end if
                                 end if
             
@@ -450,7 +454,7 @@ contains
     !-----------------------------------------------------------------------------------------
     !       Change emf parameters through steering file
     !-----------------------------------------------------------------------------------------
-    subroutine steering_emf_diag(sim, command_name, report_spec, new_value, ierr)      
+    subroutine steering_emf_diag(sim, report_spec, command_name, new_value, ierr)      
         implicit none
         
         ! Argumentos
@@ -489,6 +493,9 @@ contains
         ! Passo 2: Encontrar o relatório principal (quantidade)
         found = .false.
         do while (associated(report) .and. .not. found)
+            if (root(sim%no_co)) then
+                print *, "DEBUG - Found: ", report%name
+            endif
             if (trim(report%name) == quant) then
                 found = .true.
                 exit
@@ -617,19 +624,37 @@ contains
         
     end subroutine steering_emf_diag
 
-
-    !-----------------------------------------------------------------------------------------
-    !       Remove existing emf reports
-    !-----------------------------------------------------------------------------------------
-    subroutine remove_emf_report()
-
-    end subroutine remove_emf_report
-
     !-----------------------------------------------------------------------------------------
     !       Add emf reports
     !-----------------------------------------------------------------------------------------
-    subroutine add_emf_report()
+    subroutine add_emf_report(sim, input_string)
+        character(len=*), intent(in) :: input_string
+        class(t_simulation), intent(inout) :: sim
+        integer :: ierr
+        type(t_diag_emf), pointer :: diag_emf
 
+        ! Get the emf and diag_emf structures from the simulation
+        diag_emf => sim%emf%diag
+
+        ! Use the existing add_report routine to add the new report
+        call add_report( diag_emf%reports, trim(input_string), diag_emf%report_quants, &
+                        sim%g_space%x_dim, ierr )
+
+        ! Initialize the report if it was added successfully
+        if (ierr == 0) then
+            ! WARNING THIS MAY CAUSE PROBLEMS AND IS EXPERIMENTAL
+            call sim % emf % diag % init( sim % emf %ext_fld == p_extfld_none, sim % emf %part_fld_alloc, interpolation( sim%part ))
+        end if
+
+        if (ierr /= 0) then
+            if (mpi_node() == 0) then
+                print *, "Error adding EMF report: ", trim(input_string)
+            endif
+        else
+            if (mpi_node() == 0) then
+                print *, "Added new EMF report: ", trim(input_string)
+            endif
+        endif
     end subroutine add_emf_report
 
     !<----------------------CURRENT------------------------------>! 
@@ -637,7 +662,7 @@ contains
     !-----------------------------------------------------------------------------------------
     !       Change current parameters through steering file
     !-----------------------------------------------------------------------------------------
-    subroutine steering_current_diag(sim, command_name, report_spec, new_value, ierr)      
+    subroutine steering_current_diag(sim, report_spec, command_name, new_value, ierr)      
         implicit none
         
         ! Argumentos
@@ -786,181 +811,39 @@ contains
     end subroutine steering_current_diag
 
     !-----------------------------------------------------------------------------------------
-    !       Remove existing emf reports
+    !       Add current reports
     !-----------------------------------------------------------------------------------------
-    subroutine remove_current_report()
+    subroutine add_current_report(sim, input_string)
+        character(len=*), intent(in) :: input_string
+        class(t_simulation), intent(inout) :: sim
+        integer :: ierr
+        type(t_current_diag), pointer :: diag_current
 
-    end subroutine remove_current_report
+        ! Get the emf and diag_emf structures from the simulation
+        diag_current=> sim%jay%diag
 
-    !-----------------------------------------------------------------------------------------
-    !       Add emf reports
-    !-----------------------------------------------------------------------------------------
-    subroutine add_current_report()
+        ! Use the existing add_report routine to add the new report
+        call add_report( diag_current%reports, trim(input_string), diag_current%report_quants, &
+                        sim%g_space%x_dim, ierr )
+
+        ! Initialize the report if it was added successfully
+        if (ierr == 0) then
+            ! WARNING THIS MAY CAUSE PROBLEMS AND IS EXPERIMENTAL
+            call sim % jay % diag % init(interpolation( sim%part ))
+        end if
+
+        if (ierr /= 0) then
+            if (mpi_node() == 0) then
+                print *, "Error adding CURRENT report: ", trim(input_string)
+            endif
+        else
+            if (mpi_node() == 0) then
+                print *, "Added new CURRENT report: ", trim(input_string)
+            endif
+        endif
 
     end subroutine add_current_report
 
     !<----------------------NEUTRALS------------------------------>! 
-
-    subroutine steering_neutrals_diag(sim, command_name, report_spec, new_value, ierr)      
-        implicit none
-        
-        ! Argumentos
-        class(t_simulation), intent(inout) :: sim
-        character(*), intent(in) :: command_name      ! Nome do comando (ex: "ndump_fac", "n_ave", etc.)
-        character(*), intent(in) :: report_spec       ! Especificação do relatório (ex: "j1", "j2", "j3")
-        integer, dimension(:), intent(in) :: new_value ! Novo valor (pode ser escalar ou array)
-        integer, intent(out) :: ierr                  ! Código de erro (0 = sucesso)
-        
-        ! Variáveis locais
-        type(t_diag_neutral), pointer :: diag_neutral
-        type(t_vdf_report), pointer :: report
-        type(t_vdf_report_item), pointer :: item
-        character(len=:), allocatable :: quant, details
-        integer :: pos, item_type, direction, id
-        logical :: found, is_tavg
-        integer, dimension(2) :: gipos
-        
-        ! Inicializa ponteiros e variáveis
-        ierr = 0
-        diag_neutral => sim%part%neutral%diag
-        report => diag_neutral%reports
-        
-        pos = index(report_spec, ',') ! DOES NOT WORK
-        if (pos > 0) then
-            quant = report_spec(1:pos-1)        ! Assign substring first
-            quant = trim(adjustl(quant))        ! Then trim/adjust
-            details = report_spec(pos+1:)       ! Assign substring first
-            details = trim(adjustl(details))    ! Then trim/adjust
-        else
-            quant = trim(adjustl(report_spec))
-            details = ""
-        end if
-        
-        ! Passo 2: Encontrar o relatório principal (quantidade)
-        found = .false.
-        do while (associated(report) .and. .not. found)
-            if (trim(report%name) == quant) then
-                found = .true.
-                exit
-            end if
-            report => report%next
-        end do
-        
-        if (.not. found) then
-            ierr = -1  ! Relatório não encontrado
-            return
-        end if
-        
-        ! Passo 3: Parse dos detalhes (se existirem)
-        item_type = -1
-        direction = -1
-        gipos = -1
-        is_tavg = .false.
-        id = -1
-        
-        if (len_trim(details) > 0) then
-            ! Parse dos componentes
-            if (index(details, 'tavg') > 0) is_tavg = .true.
-            if (index(details, 'savg') > 0) item_type = p_savg
-            if (index(details, 'senv') > 0) item_type = p_senv
-            if (index(details, 'line') > 0) item_type = p_line
-            if (index(details, 'slice') > 0) item_type = p_slice
-            
-            ! Parse de direção e posições
-            if (index(details, 'x1') > 0) direction = 1
-            if (index(details, 'x2') > 0) direction = 2
-            if (index(details, 'x3') > 0) direction = 3
-            
-            ! Extrair posições (ex: "64, 96")
-            ! (Implementação simplificada - em produção usar split mais robusto)
-            if (item_type == p_line .or. item_type == p_slice) then
-                pos = index(details, ',', back=.true.)
-                if (pos > 0) then
-                    read(details(pos+1:), *) gipos(1)
-                    if (item_type == p_line) then
-                        pos = index(details(1:pos-1), ',', back=.true.)
-                        if (pos > 0) read(details(pos+1:), *) gipos(2)
-                    end if
-                end if
-            end if
-        end if
-        
-       ! Passo 4: Encontrar item específico
-        if (item_type > 0) then
-            found = .false.
-            item => report%list
-            do while (associated(item) .and. .not. found)
-                if (item%type == item_type) then
-                    if (item_type == p_line .or. item_type == p_slice) then
-                        ! Corrigido: usar .eqv. para lógicos
-                        if (item%direction == direction .and. &
-                            all(item%gipos == gipos) .and. &
-                            item%tavg .eqv. is_tavg) then
-                            found = .true.
-                            exit
-                        end if
-                    else
-                        ! Corrigido: usar .eqv. para lógicos
-                        if (item%tavg .eqv. is_tavg) then
-                            found = .true.
-                            exit
-                        end if
-                    end if
-                end if
-                item => item%next
-            end do
-        end if
-        
-        ! Passo 5: Aplicar modificações conforme o comando
-        select case (trim(command_name))
-            ! Comandos globais (afetam todo o relatório)
-            case ("ndump_fac")
-                report%ndump(p_full) = new_value(1)
-            case ("ndump_fac_ave")
-                report%ndump(p_savg) = new_value(1)
-                report%ndump(p_senv) = new_value(1)
-            case ("ndump_fac_lineout")
-                report%ndump(p_line) = new_value(1)
-                report%ndump(p_slice) = new_value(1)
-            
-            ! Comandos para itens específicos
-            case ("n_ave")
-                if (size(new_value) >= 3) then
-                    report%n_ave(1:3) = new_value(1:3)
-                else
-                    ierr = -3  ! Tamanho inválido
-                end if
-            case ("n_tavg")
-                report%n_tavg = new_value(1)
-            case ("gipos")
-                if (associated(item) .and. size(new_value) >= size(item%gipos)) then
-                    item%gipos = new_value(1:size(item%gipos))
-                else
-                    ierr = -4  ! Item inválido ou tamanho incorreto
-                end if
-            
-            case ("prec")
-                report%prec = new_value(1)
-            
-            case default
-                ierr = -5  ! Comando desconhecido
-        end select
-        
-    end subroutine steering_neutrals_diag
-
-    !-----------------------------------------------------------------------------------------
-    !       Remove existing emf reports
-    !-----------------------------------------------------------------------------------------
-    subroutine remove_neutrals_report()
-
-    end subroutine remove_neutrals_report
-
-    !-----------------------------------------------------------------------------------------
-    !       Add emf reports
-    !-----------------------------------------------------------------------------------------
-    subroutine add_neutrals_report()
-
-    end subroutine add_neutrals_report
-
 
 end module m_workflow

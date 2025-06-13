@@ -25,6 +25,8 @@ module m_workflow !*!
     use m_diag_neutral
     use m_particles_define
     use m_particles
+
+    use m_emf_define ! para o p_extfld_none
     
 
 
@@ -272,7 +274,8 @@ contains
                                     ! Convert string array to integer array 
                                     call str_array_to_int(diag_data, diag_data_int, ierr)
                                     if (ierr == 0) then
-                                        call steering_current_diag(sim, trim(diag_command), trim(identifier), diag_data_int, ierr)
+                                        call add_current_report(sim, trim(identifier))
+                                        call steering_current_diag(sim, trim(identifier), trim(diag_command), diag_data_int, ierr)
                                     end if
                                 end if
             
@@ -287,7 +290,8 @@ contains
                                     ! Convert string array to integer array 
                                     call str_array_to_int(diag_data, diag_data_int, ierr)
                                     if (ierr == 0) then
-                                        call steering_emf_diag(sim, trim(diag_command), trim(identifier), diag_data_int, ierr)
+                                        call add_emf_report(sim, trim(identifier))
+                                        call steering_emf_diag(sim, trim(identifier), trim(diag_command), diag_data_int, ierr)
                                     end if
                                 end if
             
@@ -450,7 +454,7 @@ contains
     !-----------------------------------------------------------------------------------------
     !       Change emf parameters through steering file
     !-----------------------------------------------------------------------------------------
-    subroutine steering_emf_diag(sim, command_name, report_spec, new_value, ierr)      
+    subroutine steering_emf_diag(sim, report_spec, command_name, new_value, ierr)      
         implicit none
         
         ! Argumentos
@@ -489,6 +493,9 @@ contains
         ! Passo 2: Encontrar o relatório principal (quantidade)
         found = .false.
         do while (associated(report) .and. .not. found)
+            if (root(sim%no_co)) then
+                print *, "DEBUG - Found: ", report%name
+            endif
             if (trim(report%name) == quant) then
                 found = .true.
                 exit
@@ -617,19 +624,37 @@ contains
         
     end subroutine steering_emf_diag
 
-
-    !-----------------------------------------------------------------------------------------
-    !       Remove existing emf reports
-    !-----------------------------------------------------------------------------------------
-    subroutine remove_emf_report()
-
-    end subroutine remove_emf_report
-
     !-----------------------------------------------------------------------------------------
     !       Add emf reports
     !-----------------------------------------------------------------------------------------
-    subroutine add_emf_report()
+    subroutine add_emf_report(sim, input_string)
+        character(len=*), intent(in) :: input_string
+        class(t_simulation), intent(inout) :: sim
+        integer :: ierr
+        type(t_diag_emf), pointer :: diag_emf
 
+        ! Get the emf and diag_emf structures from the simulation
+        diag_emf => sim%emf%diag
+
+        ! Use the existing add_report routine to add the new report
+        call add_report( diag_emf%reports, trim(input_string), diag_emf%report_quants, &
+                        sim%g_space%x_dim, ierr )
+
+        ! Initialize the report if it was added successfully
+        if (ierr == 0) then
+            ! WARNING THIS MAY CAUSE PROBLEMS AND IS EXPERIMENTAL
+            call sim % emf % diag % init( sim % emf %ext_fld == p_extfld_none, sim % emf %part_fld_alloc, interpolation( sim%part ))
+        end if
+
+        if (ierr /= 0) then
+            if (mpi_node() == 0) then
+                print *, "Error adding EMF report: ", trim(input_string)
+            endif
+        else
+            if (mpi_node() == 0) then
+                print *, "Added new EMF report: ", trim(input_string)
+            endif
+        endif
     end subroutine add_emf_report
 
     !<----------------------CURRENT------------------------------>! 
@@ -637,7 +662,7 @@ contains
     !-----------------------------------------------------------------------------------------
     !       Change current parameters through steering file
     !-----------------------------------------------------------------------------------------
-    subroutine steering_current_diag(sim, command_name, report_spec, new_value, ierr)      
+    subroutine steering_current_diag(sim, report_spec, command_name, new_value, ierr)      
         implicit none
         
         ! Argumentos
@@ -786,17 +811,36 @@ contains
     end subroutine steering_current_diag
 
     !-----------------------------------------------------------------------------------------
-    !       Remove existing emf reports
+    !       Add current reports
     !-----------------------------------------------------------------------------------------
-    subroutine remove_current_report()
-    
+    subroutine add_current_report(sim, input_string)
+        character(len=*), intent(in) :: input_string
+        class(t_simulation), intent(inout) :: sim
+        integer :: ierr
+        type(t_current_diag), pointer :: diag_current
 
-    end subroutine remove_current_report
+        ! Get the emf and diag_emf structures from the simulation
+        diag_current=> sim%jay%diag
 
-    !-----------------------------------------------------------------------------------------
-    !       Add emf reports
-    !-----------------------------------------------------------------------------------------
-    subroutine add_current_report()
+        ! Use the existing add_report routine to add the new report
+        call add_report( diag_current%reports, trim(input_string), diag_current%report_quants, &
+                        sim%g_space%x_dim, ierr )
+
+        ! Initialize the report if it was added successfully
+        if (ierr == 0) then
+            ! WARNING THIS MAY CAUSE PROBLEMS AND IS EXPERIMENTAL
+            call sim % jay % diag % init(interpolation( sim%part ))
+        end if
+
+        if (ierr /= 0) then
+            if (mpi_node() == 0) then
+                print *, "Error adding CURRENT report: ", trim(input_string)
+            endif
+        else
+            if (mpi_node() == 0) then
+                print *, "Added new CURRENT report: ", trim(input_string)
+            endif
+        endif
 
     end subroutine add_current_report
 
