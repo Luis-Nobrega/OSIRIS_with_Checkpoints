@@ -278,7 +278,10 @@ subroutine run_sim( sim )
     !*! Set to false to avoid desyncronization
     file_ok = .false. 
 
-    !*! check if a file should be read by the root node 
+     ! do any per-iteration maintenance
+     call sim%iter_finished()
+
+     !*! check if a file should be read by the root node 
     #ifdef __STEERING__
       call check_workflow_step(file_ok, sim, sim%no_co, steering_exit) !*!
     #endif
@@ -289,9 +292,6 @@ subroutine run_sim( sim )
        endif
        exit
      endif
-
-     ! do any per-iteration maintenance
-     call sim%iter_finished()
 
      ! write restart files if necessary
      if ( if_restart_write( sim%restart, n(sim%tstep), ndump(sim%tstep), &

@@ -472,11 +472,14 @@ contains
         integer :: pos, item_type, direction, id
         logical :: found, is_tavg
         integer, dimension(2) :: gipos
+        integer ::  n_dimensions 
         
         ! Inicializa ponteiros e variáveis
         ierr = 0
         diag_emf => sim%emf%diag
         report => diag_emf%reports
+
+        n_dimensions = sim%g_space%x_dim ! Sets number of dimensions for spacial averages
         
         ! Passo 1: Parse da especificação do relatório
         pos = index(report_spec, ',')
@@ -582,18 +585,34 @@ contains
             
             ! Comandos para itens específicos
             case ("n_ave")
-                if (size(new_value) >= 3) then
-                    report%n_ave(1:3) = new_value(1:3)
+                if (size(new_value) >= n_dimensions) then
+                    report%n_ave(1:n_dimensions) = new_value(1:n_dimensions)
                 else
                     ierr = -3  ! Tamanho inválido
+                    if (mpi_node() == 0) then
+                        print *, "DEBUG - Invalid size for n_ave in steering_emf_diag"
+                    endif
                 end if
             case ("n_tavg")
                 report%n_tavg = new_value(1)
+                if (report%n_tavg > 0 .and. .not. associated(report%tavg_data%f1)) then
+                    call report%tavg_data%new( &
+                        sim%grid%x_dim, &       ! Dimensão espacial
+                        1, &                    ! f_dim
+                        sim%grid%g_nx, &        ! nx
+                        sim%emf%e%gc_num(), &   ! gc_num (CORRECTED)
+                        sim%emf%e%dx(), &       ! dx
+                        .true. &                ! zero
+                    )
+                endif
             case ("gipos")
                 if (associated(item) .and. size(new_value) >= size(item%gipos)) then
                     item%gipos = new_value(1:size(item%gipos))
                 else
                     ierr = -4  ! Item inválido ou tamanho incorreto
+                    if (mpi_node() == 0) then
+                        print *, "DEBUG - Invalid item or size mismatch for gipos in steering_emf_diag"
+                    endif
                 end if
             
             ! Comandos para parâmetros globais do diag_emf
@@ -602,7 +621,9 @@ contains
                     ! This quantity can't be initialized during the simulation
                     diag_emf%ndump_fac_ene_int = new_value(1)
                 else
-                    print *, "DEBUG - ndump_fac_ene_int not set, skipping"
+                    if (mpi_node() == 0) then
+                        print *, "DEBUG - ndump_fac_ene_int not set, skipping"
+                    endif
                 endif
                 
             case ("ndump_fac_charge_cons")
@@ -611,7 +632,10 @@ contains
                 if ( sim % emf % if_charge_cons( sim%tstep ) ) then
                      diag_emf%ndump_fac_charge_cons = new_value(1)
                 else
-                    print *, "DEBUG - Charge conservation diagnostic is temporarily disabled"
+                    if (mpi_node() == 0) then
+                        print *, "DEBUG - Charge conservation diagnostic is temporarily disabled"
+                    endif
+                    
                 endif
 
             case ("prec")
@@ -632,6 +656,7 @@ contains
         class(t_simulation), intent(inout) :: sim
         integer :: ierr
         type(t_diag_emf), pointer :: diag_emf
+        type(t_vdf_report), pointer :: report
 
         ! Get the emf and diag_emf structures from the simulation
         diag_emf => sim%emf%diag
@@ -643,7 +668,28 @@ contains
         ! Initialize the report if it was added successfully
         if (ierr == 0) then
             ! WARNING THIS MAY CAUSE PROBLEMS AND IS EXPERIMENTAL
-            call sim % emf % diag % init( sim % emf %ext_fld == p_extfld_none, sim % emf %part_fld_alloc, interpolation( sim%part ))
+            call sim % emf % diag % init( sim % emf %ext_fld == p_extfld_none, &
+                sim % emf %part_fld_alloc, interpolation( sim%part ))
+
+            ! Inicializa tavg_data se necessário
+            report => diag_emf%reports
+            do while (associated(report))
+                if (trim(report%name) == trim(input_string)) then
+                    if (report%n_tavg > 0) then
+                        ! Inicializa tavg_data com parâmetros da grade
+                        call report%tavg_data%new( &
+                            sim%grid%x_dim, &       ! Dimensão espacial
+                            1, &                     ! f_dim (campo escalar)
+                            sim%grid%g_nx, &         ! Tamanho da grade global
+                            sim%emf%e%gc_num(), &    ! Células guarda
+                            sim%emf%e%dx(), &        ! Tamanho do célula
+                            .true. &                 ! Zero o campo
+                        )
+                    endif
+                    exit
+                endif
+                report => report%next
+            enddo
         end if
 
         if (ierr /= 0) then
@@ -680,11 +726,14 @@ contains
         integer :: pos, item_type, direction, id
         logical :: found, is_tavg
         integer, dimension(2) :: gipos
+        integer ::  n_dimensions
         
         ! Inicializa ponteiros e variáveis
         ierr = 0
         diag_current => sim%jay%diag
         report => diag_current%reports
+
+        n_dimensions = sim%g_space%x_dim ! Sets number of dimensions for spacial averages
         
         ! Passo 1: Parse da especificação do relatório
         pos = index(report_spec, ',')
@@ -787,18 +836,46 @@ contains
             
             ! Comandos para itens específicos
             case ("n_ave")
-                if (size(new_value) >= 3) then
-                    report%n_ave(1:3) = new_value(1:3)
+                if (size(new_value) >= n_dimensions) then
+                    report%n_ave(1:n_dimensions) = new_value(1:n_dimensions)
                 else
                     ierr = -3  ! Tamanho inválido
+                    if (mpi_node() == 0) then
+                        print *, "DEBUG - Invalid size for n_ave in steering_current_diag"
+                    endif 
                 end if
             case ("n_tavg")
                 report%n_tavg = new_value(1)
+                if (report%n_tavg > 0 .and. .not. associated(report%tavg_data%f1)) then
+                    call report%tavg_data%new( &
+                        sim%grid%x_dim, &      ! x_dim
+                        1, &                   ! f_dim
+                        sim%grid%g_nx, &       ! nx
+                        sim%emf%e%gc_num(), &  ! gc_num (CORRECTED)
+                        sim%emf%e%dx(), &      ! dx -> will be using emf for easy data access
+                        .true. &               ! zero
+                    )
+                endif
+
+                ! Re-inicializa tavg_data se necessário
+                if (report%n_tavg > 0 .and. .not. associated(report%tavg_data%f1)) then
+                    call report%tavg_data%new( &
+                        sim%grid%x_dim, &   ! x_dim
+                        1, &                ! f_dim
+                        sim%grid%g_nx, &    ! nx
+                        sim%emf%e%gc_num(), &  ! gc_num
+                        sim%emf%e%dx(), &      ! dx
+                        .true. &            ! zero
+                    )
+                endif
             case ("gipos")
                 if (associated(item) .and. size(new_value) >= size(item%gipos)) then
                     item%gipos = new_value(1:size(item%gipos))
                 else
                     ierr = -4  ! Item inválido ou tamanho incorreto
+                    if (mpi_node() == 0) then
+                        print *, "DEBUG - Invalid item or size mismatch for gipos in steering_current_diag"
+                    endif 
                 end if
             
             case ("prec")
@@ -818,6 +895,7 @@ contains
         class(t_simulation), intent(inout) :: sim
         integer :: ierr
         type(t_current_diag), pointer :: diag_current
+        type(t_vdf_report), pointer :: report
 
         ! Get the emf and diag_emf structures from the simulation
         diag_current=> sim%jay%diag
@@ -830,6 +908,26 @@ contains
         if (ierr == 0) then
             ! WARNING THIS MAY CAUSE PROBLEMS AND IS EXPERIMENTAL
             call sim % jay % diag % init(interpolation( sim%part ))
+
+            report => diag_current%reports
+            do while (associated(report))
+                if (trim(report%name) == trim(input_string)) then
+                    if (report%n_tavg > 0) then
+                        ! Inicializa tavg_data com parâmetros da grade
+                        call report%tavg_data%new( &
+                            sim%grid%x_dim, &       ! Dimensão espacial
+                            1, &                     ! f_dim (campo escalar)
+                            sim%grid%g_nx, &         ! Tamanho da grade global
+                            sim%emf%e%gc_num(), &     ! Células guarda
+                            sim%emf%e%dx(), &           ! Tamanho do célula
+                            .true. &                 ! Zero o campo
+                        )
+                    endif
+                    exit
+                endif
+                report => report%next
+            enddo
+
         end if
 
         if (ierr /= 0) then
@@ -845,5 +943,7 @@ contains
     end subroutine add_current_report
 
     !<----------------------NEUTRALS------------------------------>! 
+
+    !<----------------------SPECIES------------------------------->! 
 
 end module m_workflow
