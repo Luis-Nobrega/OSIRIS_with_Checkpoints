@@ -201,9 +201,11 @@ contains
         integer :: diagnostic_ierr
         character(len=:), allocatable :: diagnostic_name
         character(len=:), allocatable :: identifier
+        character(len=:), allocatable :: name
         character(len=:), allocatable :: diag_command
         character(len=:), allocatable :: diag_data(:)
         integer, allocatable :: diag_data_int(:)
+        logical :: add_rep
 
         ! Check checkpoint status
         is_checkpoint_step = if_restart_write(sim%restart, n(sim%tstep), ndump(sim%tstep), &
@@ -219,6 +221,7 @@ contains
             end if
 
             ierr = 0
+            add_rep = .false.
 
             select case (trim(keys(i)))
                 case ("checkpoint")
@@ -269,7 +272,7 @@ contains
 
                             ! THIS PART IS CURRENTLY USELESS
                             case ("diag_current")
-                                call parse_workflow_diagnostic(val, identifier, diag_command, diag_data, diagnostic_ierr)
+                                call parse_workflow_diagnostic(val, name, identifier, diag_command, diag_data, add_rep, diagnostic_ierr)
 
                                 if (diagnostic_ierr == 0) then
                                     ! Convert string array to integer array 
@@ -285,9 +288,9 @@ contains
 
                             case ("diag_emf")
 
-                                call parse_workflow_diagnostic(val, identifier, diag_command, diag_data, diagnostic_ierr)
-
-                                if (diagnostic_ierr == 0) then
+                                call parse_workflow_diagnostic(val, name, identifier, diag_command, diag_data, add_rep, diagnostic_ierr)
+                                
+                                if (diagnostic_ierr == 0) then                                  
                                     ! Convert string array to integer array 
                                     call str_array_to_int(diag_data, diag_data_int, ierr)
                                     if (ierr == 0) then
@@ -301,7 +304,7 @@ contains
 
                             case ("diag_neutral")
 
-                                call parse_workflow_diagnostic(val, identifier, diag_command, diag_data, diagnostic_ierr)
+                                call parse_workflow_diagnostic(val, name, identifier, diag_command, diag_data, add_rep, diagnostic_ierr)
 
                                     if (diagnostic_ierr == 0) then
                                         ! Convert string array to integer array 
@@ -447,9 +450,21 @@ contains
         allocate(int_array(n))
 
         do i = 1, n
-            int_array(i) = strtoint(str_array(i), conv_ierr)
+            ! Handle empty strings explicitly
+            if (len_trim(str_array(i)) == 0) then
+                ierr = 1
+                if (mpi_node() == 0) then
+                    print *, "STR_ARRAY_TO_INT ERROR: Empty string at position ", i
+                end if
+                return
+            end if
+            
+            int_array(i) = strtoint(trim(str_array(i)), conv_ierr)
             if (conv_ierr /= 0) then
                 ierr = conv_ierr
+                if (mpi_node() == 0) then
+                    print *, "STR_ARRAY_TO_INT ERROR: Cannot convert '", trim(str_array(i)), "' to integer"
+                end if
                 return
             end if
         end do

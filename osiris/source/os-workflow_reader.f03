@@ -243,65 +243,90 @@ contains
     ! <-------------------------------->!
 
 
-    subroutine parse_workflow_diagnostic(string, identifier, command, data, ierr)
-        ! Subroutine parses strings for workflow diagnostics.
-        ! Format: [identifier, command, value1, value2, ...]
+    subroutine parse_workflow_diagnostic(string, name, identifier, command, data, add, ierr)
         character(len=*), intent(in) :: string
-        character(len=:), allocatable, intent(out) :: identifier, command
-        character(len=:), allocatable, intent(out) :: data(:)
+        character(len=:), allocatable, intent(out) :: name, identifier, command, data(:)
+        logical, intent(out) :: add
         integer, intent(out) :: ierr
-        
         character(len=len(string)) :: working_string, temp_string
         character(len=len(string)), allocatable :: temp_data(:)
-        integer :: i, n, pos, count
-        
-        ! Initialize outputs
+        integer :: i, pos, count, start_idx, end_idx
+
+        ! Inicialização e limpeza
         ierr = 1
+        add = .false.
+        if (allocated(name)) deallocate(name)
         if (allocated(identifier)) deallocate(identifier)
         if (allocated(command)) deallocate(command)
         if (allocated(data)) deallocate(data)
-        
-        ! Remove whitespace and brackets
-        working_string = adjustl(string)
-        working_string = trim(working_string)
-        if (len_trim(working_string) == 0) return
-        
-        ! Remove brackets if present
-        if (working_string(1:1) == '[' .and. working_string(len_trim(working_string):len_trim(working_string)) == ']') then
+
+        working_string = trim(adjustl(string))
+        if (len_trim(working_string) == 0) then
+            print*, "STEERING ERROR: Empty input string"
+            return
+        end if
+
+        ! Remove colchetes
+        if (working_string(1:1) == '[' .and. working_string(len_trim(working_string):) == ']') then
             working_string = working_string(2:len_trim(working_string)-1)
             working_string = trim(adjustl(working_string))
         end if
-        
-        ! Count semicolons to determine number of elements
+
+        ! Contar elementos baseados em ponto-e-vírgula
         count = 1
         do i = 1, len_trim(working_string)
             if (working_string(i:i) == ';') count = count + 1
         end do
-        
-        ! Need at least identifier, command, and one data value
-        if (count < 3) return
-        
-        ! First parse identifier
+
+        ! Verificar número mínimo de elementos
+        if (count < 4) then
+            print*, "STEERING ERROR: Expected 4+ elements, got", count
+            return
+        end if
+
+        ! Parse NAME (primeiro campo)
         pos = index(working_string, ';')
-        if (pos == 0) return
+        if (pos <= 0) then
+            print*, "STEERING ERROR: Missing first ';'"
+            return
+        end if
+        name = trim(adjustl(working_string(1:pos-1)))
+        working_string = trim(adjustl(working_string(pos+1:)))
+
+        ! Verificar e processar sinal '+'
+        if (index(name, '+') > 0) then
+            add = .true.
+            name = name(1:index(name, '+')-1)
+        end if
+
+        ! Parse IDENTIFIER (segundo campo)
+        pos = index(working_string, ';')
+        if (pos <= 0) then
+            print*, "STEERING ERROR: Missing second ';'"
+            return
+        end if
         identifier = trim(adjustl(working_string(1:pos-1)))
+        working_string = trim(adjustl(working_string(pos+1:)))
+
+        ! Parse COMMAND (terceiro campo)
+        pos = index(working_string, ';')
+        if (pos <= 0) then
+            print*, "STEERING ERROR: Missing third ';'"
+            return
+        end if
+        command = trim(adjustl(working_string(1:pos-1)))
         
-        ! Then parse command
-        temp_string = working_string(pos+1:)
-        pos = index(temp_string, ';')
-        if (pos == 0) return
-        command = trim(adjustl(temp_string(1:pos-1)))
+        ! O restante são os DADOS (pode ter múltiplos valores)
+        temp_string = trim(adjustl(working_string(pos+1:)))
         
-        ! Finally parse data values
-        temp_string = temp_string(pos+1:)
+        ! Contar valores de dados
         count = 1
         do i = 1, len_trim(temp_string)
             if (temp_string(i:i) == ';') count = count + 1
         end do
-        
-        ! Temporary fixed-length storage
+
+        ! Extrair valores de dados
         allocate(character(len=len(temp_string)) :: temp_data(count))
-        
         do i = 1, count
             pos = index(temp_string, ';')
             if (pos == 0) then
@@ -309,16 +334,16 @@ contains
                 exit
             else
                 temp_data(i) = trim(adjustl(temp_string(1:pos-1)))
-                temp_string = temp_string(pos+1:)
+                temp_string = trim(adjustl(temp_string(pos+1:)))
             end if
         end do
-        
-        ! Convert to deferred-length strings
+
+        ! Converter para strings de comprimento variável
         allocate(character(len=maxval(len_trim(temp_data))) :: data(count))
         do i = 1, count
             data(i) = trim(temp_data(i))
         end do
-        
+
         ierr = 0
     end subroutine parse_workflow_diagnostic
 
