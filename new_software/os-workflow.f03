@@ -282,9 +282,6 @@ contains
                                         call steering_current_diag(sim, trim(identifier), trim(diag_command), diag_data_int, ierr)
                                     end if
                                 end if
-            
-                            ! Desalocar apenas se alocado
-                            if (allocated(diag_data_int)) deallocate(diag_data_int)
 
                             case ("diag_emf")
 
@@ -292,15 +289,15 @@ contains
                                 
                                 if (diagnostic_ierr == 0) then                                  
                                     ! Convert string array to integer array 
+                                    if (allocated(diag_data_int)) deallocate(diag_data_int)
                                     call str_array_to_int(diag_data, diag_data_int, ierr)
+
                                     if (ierr == 0) then
                                         call add_emf_report(sim, trim(identifier))
                                         call steering_emf_diag(sim, trim(identifier), trim(diag_command), diag_data_int, ierr)
                                     end if
                                 end if
             
-                            ! Desalocar apenas se alocado
-                            if (allocated(diag_data_int)) deallocate(diag_data_int)
 
                             case ("diag_neutral")
 
@@ -308,38 +305,53 @@ contains
 
                                     if (diagnostic_ierr == 0) then
                                         ! Convert string array to integer array 
-                                        call str_array_to_int(diag_data, diag_data_int, ierr)
+                                    if (allocated(diag_data_int)) deallocate(diag_data_int)
+                                    call str_array_to_int(diag_data, diag_data_int, ierr)
                                         if (ierr == 0) then
                                             !!!!!!!!!!!!!! MUDAR ISTO
+                                            !call add_current_report(sim, trim(identifier))
                                             call steering_neutral_diag(sim, trim(identifier), name, trim(diag_command), diag_data_int, ierr)
                                         end if
                                     end if
 
                             case ("diag_species")
-                            !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
                                 call parse_workflow_diagnostic(val, name, identifier, diag_command, diag_data, add_rep, diagnostic_ierr)
 
                                     if (diagnostic_ierr == 0) then
                                         ! Convert string array to integer array 
-                                        call str_array_to_int(diag_data, diag_data_int, ierr)
+                                    if (allocated(diag_data_int)) deallocate(diag_data_int)
+                                    call str_array_to_int(diag_data, diag_data_int, ierr)
                                         if (ierr == 0) then
                                             !!!!!!!!!!!!!! MUDAR ISTO
+                                            !call add_species_report(sim, trim(identifier))
                                             call steering_species_diag(sim, trim(identifier), name, trim(diag_command), diag_data_int, ierr)
                                         end if
                                     end if
 
                             case ("diag_particles")
-                            !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                                call parse_workflow_diagnostic(val, name, identifier, diag_command, diag_data, add_rep, diagnostic_ierr)
+
+                                    if (diagnostic_ierr == 0) then
+                                        ! Convert string array to integer array 
+                                    if (allocated(diag_data_int)) deallocate(diag_data_int)
+                                    call str_array_to_int(diag_data, diag_data_int, ierr)
+                                        if (ierr == 0) then
+                                            !!!!!!!!!!!!!! MUDAR ISTO
+                                            !call add_particles_report(sim, trim(identifier))
+                                            call steering_particles_diag(sim, trim(identifier), trim(diag_command), diag_data_int, ierr)
+                                        end if
+                                    end if
                                     
                             case default
                                 if (mpi_node() == 0) &
                                     print *, "Unknown command: ", trim(diagnostic_name)
-                            ! THIS PART IS CURRENTLY USELESS
                         end select
                     end if
             end select
 
-            ! SEE WHETHER TO BCAST IERR FOR SYNCRONIZARION ??????????????????????????????????????
+            ! ------------------------------ ! 
+            ! should I add a barrier here?
+            ! ------------------------------ ! 
 
         end do
 
@@ -353,138 +365,13 @@ contains
         if (allocated(diag_data_int)) deallocate(diag_data_int)
     end subroutine check_and_execute
 
-    ! <-------------------------------->! DUPLICATED ROUTINE FROM MAIN MODULE
-
-    subroutine write_restart( sim ) !^!
-
-        implicit none
-
-        class ( t_simulation ), intent(inout) :: sim
-
-        type( t_restart_handle )    ::  restart_handle
-
-        call begin_event(restart_write_ev)
-
-        if ( mpi_node() == 0 ) then
-            print *, ''
-            print *, ' Writing checkpoint information for timestep n =', n(sim%tstep)
-            print *, ''
-        endif
-
-        #ifdef __RST_SION__
-
-        ! Measure expected file size, only required by the sion library
-        restart_handle%if_acc_size = .true.
-        restart_handle%data_size = 0
-        call sim%write_checkpoint( restart_handle )
-        restart_handle%if_acc_size = .false.
-
-        #endif
-
-        ! Open checkpoint files
-        call restart_write_open( sim%restart, comm(sim%no_co), sim%no_co%ngp_id(), &
-                                n(sim%tstep), ndump(sim%tstep), &
-                                file_id_rst, restart_handle )
-
-        ! Write checkpoint data
-        call sim%write_checkpoint( restart_handle )
-
-        ! Close checkpoint files
-        call restart_write_close( sim%restart, comm(sim%no_co), sim%no_co%ngp_id(), &
-                                    n(sim%tstep), restart_handle )
-
-        call end_event(restart_write_ev)
-
-        end subroutine write_restart
-        
-        !<-------------------------------->! 
-
-        subroutine set_max_time(sim, val, ierr)
-        implicit none
-
-        class(t_simulation), intent(inout) :: sim
-        character(len=*), intent(in) :: val
-        integer, intent(out) :: ierr
-
-        real(p_double) :: updated_tmax
-        integer :: conv_ierr
-
-        ierr = 0
-
-        updated_tmax = strtodouble(val, conv_ierr)
-
-        if (updated_tmax == 0.0d0 .or. updated_tmax < 0.0d0) then
-            ierr = 1
-            if (mpi_node() == 0) then
-                print*, "DEBUG - Tmax setting skipped", trim(val)
-            end if
-            return
-        end if
-
-        if (conv_ierr == 0) then
-            ! Use a função pública para obter o tempo atual
-            if (updated_tmax > t(sim%time)) then
-                call set_tmax(sim%time, updated_tmax)  ! Você precisa implementar essa rotina
-                if (mpi_node() == 0) then
-                    print*, "DEBUG - Updated tmax to ", tmax(sim%time)
-                end if
-            else if (mpi_node() == 0) then
-                print*, "DEBUG - tmax not updated, new value ", updated_tmax, &
-                        " is not larger than current time ", t(sim%time)
-            end if
-        else
-            ierr = 1
-            if (mpi_node() == 0) then
-                print*, "DEBUG - Error converting tmax value: ", trim(val)
-            end if
-        end if
-
-    end subroutine set_max_time
-
-    !<------------------------------------------------------->!
-
-    subroutine str_array_to_int(str_array, int_array, ierr)
-        implicit none
-        ! Inputs
-        character(len=:), allocatable, intent(in)  :: str_array(:)
-        ! Outputs
-        integer, allocatable, intent(out)          :: int_array(:)
-        integer, intent(out)                       :: ierr
-
-        ! Locals
-        integer :: i, n, conv_ierr
-
-        n = size(str_array)
-        allocate(int_array(n))
-
-        do i = 1, n
-            ! Handle empty strings explicitly
-            if (len_trim(str_array(i)) == 0) then
-                ierr = 1
-                if (mpi_node() == 0) then
-                    print *, "STR_ARRAY_TO_INT ERROR: Empty string at position ", i
-                end if
-                return
-            end if
-            
-            int_array(i) = strtoint(trim(str_array(i)), conv_ierr)
-            if (conv_ierr /= 0) then
-                ierr = conv_ierr
-                if (mpi_node() == 0) then
-                    print *, "STR_ARRAY_TO_INT ERROR: Cannot convert '", trim(str_array(i)), "' to integer"
-                end if
-                return
-            end if
-        end do
-
-        ierr = 0
-    end subroutine str_array_to_int
 
     !<------------------------------------------------------->! 
     !                 DIAGNOSTICS HANDLER
     ! All functions to handle diagnostics will be here
     !               May God have mercy on us
     !<------------------------------------------------------->! 
+
 
     !<----------------------EMF------------------------------>! 
 
@@ -681,6 +568,7 @@ contains
             report => diag_emf%reports
             do while (associated(report))
                 if (trim(report%name) == trim(input_string)) then
+
                     if (report%n_tavg > 0) then
                         ! Inicializa tavg_data com parâmetros da grade
                         call report%tavg_data%new( &
@@ -1463,7 +1351,9 @@ contains
     !            To encapsulate common tasks       
     !<------------------------------------------------------->! 
 
-
+    !-----------------------------------------------------------------------------------------
+    !       Parses the report specification string
+    !-----------------------------------------------------------------------------------------
     subroutine parse_report_spec(report_spec, quant, details, item_type, direction, gipos, is_tavg)
         character(*), intent(in) :: report_spec
         character(:), allocatable, intent(out) :: quant, details
@@ -1471,12 +1361,14 @@ contains
         integer, dimension(2), intent(out) :: gipos
         logical, intent(out) :: is_tavg
         
-        integer :: pos
+        integer :: pos, pos2, ierr
+        character(len=256) :: token
+        logical :: has_direction
         
         ! Inicialização
         item_type = -1; direction = -1; gipos = -1; is_tavg = .false.
         
-        ! Separa quantidade e detalhes
+        ! 1. Separa quantidade e detalhes
         pos = index(report_spec, ',')
         if (pos > 0) then
             quant = trim(adjustl(report_spec(1:pos-1)))
@@ -1486,29 +1378,287 @@ contains
             details = ""
         end if
         
-        ! Analisa detalhes
-        if (len_trim(details) > 0) then
-            if (index(details, 'tavg') > 0) is_tavg = .true.
-            if (index(details, 'savg') > 0) item_type = p_savg
-            if (index(details, 'senv') > 0) item_type = p_senv
-            if (index(details, 'line') > 0) item_type = p_line
-            if (index(details, 'slice') > 0) item_type = p_slice
-            if (index(details, 'x1') > 0) direction = 1
-            if (index(details, 'x2') > 0) direction = 2
-            if (index(details, 'x3') > 0) direction = 3
+        ! 2. Verifica se tem 'tavg' em qualquer lugar
+        is_tavg = (index(details, 'tavg') > 0)
+        
+        ! 3. Determina o tipo de item
+        if (index(details, 'savg') > 0) item_type = p_savg
+        if (index(details, 'senv') > 0) item_type = p_senv
+        if (index(details, 'line') > 0) item_type = p_line
+        if (index(details, 'slice') > 0) item_type = p_slice
+        
+        ! Default para full report se nenhum tipo especificado
+        if (item_type == -1) item_type = p_full
+        
+        ! 4. Extrai direção (se aplicável)
+        has_direction = .false.
+        if (index(details, 'x1') > 0) then
+            direction = 1; has_direction = .true.
+        else if (index(details, 'x2') > 0) then
+            direction = 2; has_direction = .true.
+        else if (index(details, 'x3') > 0) then
+            direction = 3; has_direction = .true.
+        end if
+        
+        ! 5. Processa posições (gipos) - abordagem robusta
+        gipos = -1  ! Inicializa com valor inválido
+        if (item_type == p_line .or. item_type == p_slice) then
+            ! Encontra o último bloco numérico nos detalhes
+            pos = index(details, ',', back=.true.)
             
-            ! Extrai posições para linha/fatia
-            if (item_type == p_line .or. item_type == p_slice) then
-                pos = index(details, ',', back=.true.)
-                if (pos > 0) then
-                    read(details(pos+1:), *) gipos(1)
-                    if (item_type == p_line) then
-                        pos = index(details(1:pos-1), ',', back=.true.)
-                        if (pos > 0) read(details(pos+1:), *) gipos(2)
+            if (pos > 0) then
+                ! Tenta ler primeiro valor (após última vírgula)
+                token = trim(adjustl(details(pos+1:)))
+                read(token, *, iostat=ierr) gipos(1)
+                
+                ! Para lineouts, tenta ler segundo valor (se existir)
+                if (item_type == p_line .and. ierr == 0) then
+                    ! Procura vírgula anterior
+                    pos2 = index(details(1:pos-1), ',', back=.true.)
+                    if (pos2 > 0) then
+                        token = trim(adjustl(details(pos2+1:pos-1)))
+                        read(token, *, iostat=ierr) gipos(2)
                     end if
                 end if
             end if
         end if
     end subroutine parse_report_spec
+
+
+    !-----------------------------------------------------------------------------------------
+    !       Checks if the addition of a report is valid to avoid crashes 
+    !       It will check if n_ave and n_tavg are set correctly
+    !-----------------------------------------------------------------------------------------
+    subroutine valid_report_add(sim, identifier, diag_command, report, ierr)
+        implicit none
+
+        class(t_simulation), intent(inout) :: sim
+        character(len=*), intent(in) :: identifier
+        character(len=*), intent(in) :: diag_command
+        type(t_vdf_report), pointer, intent(inout) :: report
+        integer, intent(out) :: ierr
+
+        ierr = 0
+
+        ! 1) Check if the report exists
+        if (.not. associated(report)) then
+            ! Report not initialized
+            if (index(identifier, ',') > 0) then
+                ! Complex identifier is invalid if report doesn't exist
+                ierr = 2
+                return
+            else
+                ! Basic command, allow creation
+                return
+            end if
+        else
+            ! Report exists
+            if (index(identifier, ',') > 0) then
+                ! Identifier is complex → check if valid tags are included
+
+                if (index(identifier, 'tavg') > 0) then
+                    if (report%ndump(p_full) < 1 .or. report%n_tavg < 2) then
+                        ierr = 3
+                        if (root(sim%no_co)) then
+                            print *, "DEBUG - Ignoring tavg. Ident: ", trim(identifier), "Cmd: ", trim(diag_command)
+                        end if
+                        return
+                    end if
+                end if
+
+                if (index(identifier, 'savg') > 0) then
+                    if (report%ndump(p_savg) < 1) then
+                        ierr = 3
+                        if (root(sim%no_co)) then
+                            print *, "DEBUG - Ignoring savg. Ident: ", trim(identifier), "Cmd: ", trim(diag_command)
+                        end if
+                        return
+                    ! Should check this, but there is a syntax error in .not. condition -> FIX LATER
+
+                    !else if (.not. ((all(n_ave(1:sim%g_space%x_dim) >= 1)) .and. (any(n_ave(1:sim%g_space%x_dim) > 1)))) then 
+                    !    ierr = 3
+                    !    if (root(sim%no_co)) then
+                    !        print *, "DEBUG - Invalid n_ave for savg. Ident: ", trim(identifier), "Cmd: ", trim(diag_command)
+                    !    end if
+                    !   return
+
+                    end if
+                end if
+
+                if (index(identifier, 'senv') > 0) then
+                    if (report%ndump(p_senv) < 1) then
+                        ierr = 3
+                        if (root(sim%no_co)) then
+                            print *, "DEBUG - Ignoring senv. Ident: ", trim(identifier), "Cmd: ", trim(diag_command)
+                        end if
+                        return
+                    end if
+                end if
+
+                if (index(identifier, 'line') > 0) then
+                    if (report%ndump(p_line) < 1 .or. sim%g_space%x_dim < 2) then
+                        ierr = 3
+                        if (root(sim%no_co)) then
+                            print *, "DEBUG - Ignoring line. Ident: ", trim(identifier), "Cmd: ", trim(diag_command)
+                        end if
+                        return
+                    end if
+                end if
+
+                if (index(identifier, 'slice') > 0) then
+                    if (sim%g_space%x_dim < 3 .or. report%ndump(p_slice) < 1) then
+                        ierr = 3
+                        if (root(sim%no_co)) then
+                            print *, "DEBUG - Ignoring slice. Ident: ", trim(identifier), "Cmd: ", trim(diag_command)
+                        end if
+                        return
+                    end if
+                end if
+
+            else
+                ! Simple identifier, allow
+                return
+            end if
+        end if
+
+    end subroutine valid_report_add
+
+
+
+    
+    !-----------------------------------------------------------------------------------------
+    !       Orders a restart write -> Copied from main file
+    !-----------------------------------------------------------------------------------------
+    subroutine write_restart( sim ) !^!
+
+        implicit none
+
+        class ( t_simulation ), intent(inout) :: sim
+
+        type( t_restart_handle )    ::  restart_handle
+
+        call begin_event(restart_write_ev)
+
+        if ( mpi_node() == 0 ) then
+            print *, ''
+            print *, ' Writing checkpoint information for timestep n =', n(sim%tstep)
+            print *, ''
+        endif
+
+        #ifdef __RST_SION__
+
+        ! Measure expected file size, only required by the sion library
+        restart_handle%if_acc_size = .true.
+        restart_handle%data_size = 0
+        call sim%write_checkpoint( restart_handle )
+        restart_handle%if_acc_size = .false.
+
+        #endif
+
+        ! Open checkpoint files
+        call restart_write_open( sim%restart, comm(sim%no_co), sim%no_co%ngp_id(), &
+                                n(sim%tstep), ndump(sim%tstep), &
+                                file_id_rst, restart_handle )
+
+        ! Write checkpoint data
+        call sim%write_checkpoint( restart_handle )
+
+        ! Close checkpoint files
+        call restart_write_close( sim%restart, comm(sim%no_co), sim%no_co%ngp_id(), &
+                                    n(sim%tstep), restart_handle )
+
+        call end_event(restart_write_ev)
+
+    end subroutine write_restart
+        
+    
+    !----------------------------------------------------------------------------------------
+    !       Changes the maximum time of the simulation
+    !----------------------------------------------------------------------------------------
+
+    subroutine set_max_time(sim, val, ierr)
+        implicit none
+
+        class(t_simulation), intent(inout) :: sim
+        character(len=*), intent(in) :: val
+        integer, intent(out) :: ierr
+
+        real(p_double) :: updated_tmax
+        integer :: conv_ierr
+
+        ierr = 0
+
+        updated_tmax = strtodouble(val, conv_ierr)
+
+        if (updated_tmax == 0.0d0 .or. updated_tmax < 0.0d0) then
+            ierr = 1
+            if (mpi_node() == 0) then
+                print*, "DEBUG - Tmax setting skipped", trim(val)
+            end if
+            return
+        end if
+
+        if (conv_ierr == 0) then
+            ! Use a função pública para obter o tempo atual
+            if (updated_tmax > t(sim%time)) then
+                call set_tmax(sim%time, updated_tmax)  ! Você precisa implementar essa rotina
+                if (mpi_node() == 0) then
+                    print*, "DEBUG - Updated tmax to ", tmax(sim%time)
+                end if
+            else if (mpi_node() == 0) then
+                print*, "DEBUG - tmax not updated, new value ", updated_tmax, &
+                        " is not larger than current time ", t(sim%time)
+            end if
+        else
+            ierr = 1
+            if (mpi_node() == 0) then
+                print*, "DEBUG - Error converting tmax value: ", trim(val)
+            end if
+        end if
+
+    end subroutine set_max_time
+
+    !----------------------------------------------------------------------------------------
+    !       Converts an array of strings to integers
+    !       WARNING: This funcion is temporary. The array will be substitured 
+    !       by a list in the near future to acommodate reals, bools and strings 
+    !----------------------------------------------------------------------------------------
+
+    subroutine str_array_to_int(str_array, int_array, ierr)
+        implicit none
+        ! Inputs
+        character(len=:), allocatable, intent(in)  :: str_array(:)
+        ! Outputs
+        integer, allocatable, intent(out)          :: int_array(:)
+        integer, intent(out)                       :: ierr
+
+        ! Locals
+        integer :: i, n, conv_ierr
+
+        n = size(str_array)
+        allocate(int_array(n))
+
+        do i = 1, n
+            ! Handle empty strings explicitly
+            if (len_trim(str_array(i)) == 0) then
+                ierr = 1
+                if (mpi_node() == 0) then
+                    print *, "STR_ARRAY_TO_INT ERROR: Empty string at position ", i
+                end if
+                return
+            end if
+            
+            int_array(i) = strtoint(trim(str_array(i)), conv_ierr)
+            if (conv_ierr /= 0) then
+                ierr = conv_ierr
+                if (mpi_node() == 0) then
+                    print *, "STR_ARRAY_TO_INT ERROR: Cannot convert '", trim(str_array(i)), "' to integer"
+                end if
+                return
+            end if
+        end do
+
+        ierr = 0
+    end subroutine str_array_to_int
 
 end module m_workflow
