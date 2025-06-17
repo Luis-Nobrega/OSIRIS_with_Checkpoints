@@ -106,6 +106,10 @@ CFLAGS_profile    = -g $(CFLAGS_production)
 # H5_FCOMPILEFLAGS = -I$(HDF5_INCLUDE) 
 # H5_FLINKFLAGS    = -L$(HDF5_LIB) -lhdf5_fortran -lhdf5 -lz -ldl -lm \
 #                    -Wl,-rpath -Wl,$(HDF5_LIB) -Wl,--enable-new-dtags
+H5_FCOMPILEFLAGS = -I/usr/local/hdf5/include
+H5_FLINKFLAGS    = -L/usr/local/hdf5/lib \
+                   -lhdf5hl_fortran -lhdf5_hl -lhdf5_fortran -lhdf5 \
+                   -lz -lrt -ldl -lm -Wl,-rpath -Wl,/usr/local/hdf5/lib
 
 # MPI Library Paths
 MPI_FCOMPILEFLAGS = -I/usr/lib/x86_64-linux-gnu/openmpi/lib/../../fortran/gfortran-mod-15/openmpi -I/usr/lib/x86_64-linux-gnu/openmpi/lib

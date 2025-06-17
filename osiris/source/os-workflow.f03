@@ -311,14 +311,22 @@ contains
                                         call str_array_to_int(diag_data, diag_data_int, ierr)
                                         if (ierr == 0) then
                                             !!!!!!!!!!!!!! MUDAR ISTO
-                                            call steering_neutral_diag(sim, trim(identifier), "Neutral", trim(diag_command), diag_data_int, ierr)
+                                            call steering_neutral_diag(sim, trim(identifier), name, trim(diag_command), diag_data_int, ierr)
                                         end if
                                     end if
 
                             case ("diag_species")
                             !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-                                if (mpi_node() == 0) &
-                                    print *, "DEBUG - ", trim(diagnostic_name), " command found"
+                                call parse_workflow_diagnostic(val, name, identifier, diag_command, diag_data, add_rep, diagnostic_ierr)
+
+                                    if (diagnostic_ierr == 0) then
+                                        ! Convert string array to integer array 
+                                        call str_array_to_int(diag_data, diag_data_int, ierr)
+                                        if (ierr == 0) then
+                                            !!!!!!!!!!!!!! MUDAR ISTO
+                                            call steering_species_diag(sim, trim(identifier), name, trim(diag_command), diag_data_int, ierr)
+                                        end if
+                                    end if
 
                             case ("diag_particles")
                             !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -498,7 +506,7 @@ contains
         type(t_vdf_report), pointer :: report
         type(t_vdf_report_item), pointer :: item
         character(len=:), allocatable :: quant, details
-        integer :: pos, item_type, direction, id
+        integer :: pos, item_type, direction
         logical :: found, is_tavg
         integer, dimension(2) :: gipos
         integer ::  n_dimensions 
@@ -541,38 +549,7 @@ contains
         end if
         
         ! Passo 3: Parse dos detalhes (se existirem)
-        item_type = -1
-        direction = -1
-        gipos = -1
-        is_tavg = .false.
-        id = -1
-        
-        if (len_trim(details) > 0) then
-            ! Parse dos componentes
-            if (index(details, 'tavg') > 0) is_tavg = .true.
-            if (index(details, 'savg') > 0) item_type = p_savg
-            if (index(details, 'senv') > 0) item_type = p_senv
-            if (index(details, 'line') > 0) item_type = p_line
-            if (index(details, 'slice') > 0) item_type = p_slice
-            
-            ! Parse de direção e posições
-            if (index(details, 'x1') > 0) direction = 1
-            if (index(details, 'x2') > 0) direction = 2
-            if (index(details, 'x3') > 0) direction = 3
-            
-            ! Extrair posições (ex: "64, 96")
-            ! (Implementação simplificada - em produção usar split mais robusto)
-            if (item_type == p_line .or. item_type == p_slice) then
-                pos = index(details, ',', back=.true.)
-                if (pos > 0) then
-                    read(details(pos+1:), *) gipos(1)
-                    if (item_type == p_line) then
-                        pos = index(details(1:pos-1), ',', back=.true.)
-                        if (pos > 0) read(details(pos+1:), *) gipos(2)
-                    end if
-                end if
-            end if
-        end if
+        call parse_report_spec(report_spec, quant, details, item_type, direction, gipos, is_tavg)
         
        ! Passo 4: Encontrar item específico
         if (item_type > 0) then
@@ -752,7 +729,7 @@ contains
         type(t_vdf_report), pointer :: report
         type(t_vdf_report_item), pointer :: item
         character(len=:), allocatable :: quant, details
-        integer :: pos, item_type, direction, id
+        integer :: pos, item_type, direction
         logical :: found, is_tavg
         integer, dimension(2) :: gipos
         integer ::  n_dimensions
@@ -792,38 +769,7 @@ contains
         end if
         
         ! Passo 3: Parse dos detalhes (se existirem)
-        item_type = -1
-        direction = -1
-        gipos = -1
-        is_tavg = .false.
-        id = -1
-        
-        if (len_trim(details) > 0) then
-            ! Parse dos componentes
-            if (index(details, 'tavg') > 0) is_tavg = .true.
-            if (index(details, 'savg') > 0) item_type = p_savg
-            if (index(details, 'senv') > 0) item_type = p_senv
-            if (index(details, 'line') > 0) item_type = p_line
-            if (index(details, 'slice') > 0) item_type = p_slice
-            
-            ! Parse de direção e posições
-            if (index(details, 'x1') > 0) direction = 1
-            if (index(details, 'x2') > 0) direction = 2
-            if (index(details, 'x3') > 0) direction = 3
-            
-            ! Extrair posições (ex: "64, 96")
-            ! (Implementação simplificada - em produção usar split mais robusto)
-            if (item_type == p_line .or. item_type == p_slice) then
-                pos = index(details, ',', back=.true.)
-                if (pos > 0) then
-                    read(details(pos+1:), *) gipos(1)
-                    if (item_type == p_line) then
-                        pos = index(details(1:pos-1), ',', back=.true.)
-                        if (pos > 0) read(details(pos+1:), *) gipos(2)
-                    end if
-                end if
-            end if
-        end if
+        call parse_report_spec(report_spec, quant, details, item_type, direction, gipos, is_tavg)
         
        ! Passo 4: Encontrar item específico
         if (item_type > 0) then
@@ -1058,38 +1004,7 @@ contains
         end if
         
         ! Passo 3: Parse dos detalhes (se existirem)
-        item_type = -1
-        direction = -1
-        gipos = -1
-        is_tavg = .false.
-        id = -1
-        
-        if (len_trim(details) > 0) then
-            ! Parse dos componentes
-            if (index(details, 'tavg') > 0) is_tavg = .true.
-            if (index(details, 'savg') > 0) item_type = p_savg
-            if (index(details, 'senv') > 0) item_type = p_senv
-            if (index(details, 'line') > 0) item_type = p_line
-            if (index(details, 'slice') > 0) item_type = p_slice
-            
-            ! Parse de direção e posições
-            if (index(details, 'x1') > 0) direction = 1
-            if (index(details, 'x2') > 0) direction = 2
-            if (index(details, 'x3') > 0) direction = 3
-            
-            ! Extrair posições (ex: "64, 96")
-            ! (Implementação simplificada - em produção usar split mais robusto)
-            if (item_type == p_line .or. item_type == p_slice) then
-                pos = index(details, ',', back=.true.)
-                if (pos > 0) then
-                    read(details(pos+1:), *) gipos(1)
-                    if (item_type == p_line) then
-                        pos = index(details(1:pos-1), ',', back=.true.)
-                        if (pos > 0) read(details(pos+1:), *) gipos(2)
-                    end if
-                end if
-            end if
-        end if
+        call parse_report_spec(report_spec, quant, details, item_type, direction, gipos, is_tavg)
         
        ! Passo 4: Encontrar item específico
         if (item_type > 0) then
@@ -1181,7 +1096,7 @@ contains
 
     !<----------------------SPECIES------------------------------>! 
 
-     !-----------------------------------------------------------------------------------------
+    !-----------------------------------------------------------------------------------------
     !       Change neutral parameters through steering file
     !-----------------------------------------------------------------------------------------
     subroutine steering_species_diag(sim, report_spec, particle_name, command_name, new_value, ierr)      
@@ -1263,38 +1178,7 @@ contains
         end if
         
         ! Passo 3: Parse dos detalhes (se existirem)
-        item_type = -1
-        direction = -1
-        gipos = -1
-        is_tavg = .false.
-        id = -1
-        
-        if (len_trim(details) > 0) then
-            ! Parse dos componentes
-            if (index(details, 'tavg') > 0) is_tavg = .true.
-            if (index(details, 'savg') > 0) item_type = p_savg
-            if (index(details, 'senv') > 0) item_type = p_senv
-            if (index(details, 'line') > 0) item_type = p_line
-            if (index(details, 'slice') > 0) item_type = p_slice
-            
-            ! Parse de direção e posições
-            if (index(details, 'x1') > 0) direction = 1
-            if (index(details, 'x2') > 0) direction = 2
-            if (index(details, 'x3') > 0) direction = 3
-            
-            ! Extrair posições (ex: "64, 96")
-            ! (Implementação simplificada - em produção usar split mais robusto)
-            if (item_type == p_line .or. item_type == p_slice) then
-                pos = index(details, ',', back=.true.)
-                if (pos > 0) then
-                    read(details(pos+1:), *) gipos(1)
-                    if (item_type == p_line) then
-                        pos = index(details(1:pos-1), ',', back=.true.)
-                        if (pos > 0) read(details(pos+1:), *) gipos(2)
-                    end if
-                end if
-            end if
-        end if
+        call parse_report_spec(report_spec, quant, details, item_type, direction, gipos, is_tavg)
         
        ! Passo 4: Encontrar item específico
         if (item_type > 0) then
@@ -1405,5 +1289,226 @@ contains
     subroutine add_species_report()
         ! For now does nothing 
     end subroutine add_species_report
+
+    !<----------------------PARTICLES------------------------------>! 
+
+    !-----------------------------------------------------------------------------------------
+    !       Change PARTICLE parameters through steering file
+    !-----------------------------------------------------------------------------------------
+    subroutine steering_particles_diag(sim, report_spec, command_name, new_value, ierr)      
+        implicit none
+        
+        ! Argumentos
+        class(t_simulation), intent(inout) :: sim      
+        character(*), intent(in) :: command_name      ! Nome do comando (ex: "ndump_fac", "n_ave", etc.)
+        character(*), intent(in) :: report_spec       ! Especificação do relatório (ex: "e3", "e2, line, x1, 64, 96")
+        integer, dimension(:), intent(in) :: new_value ! Novo valor (pode ser escalar ou array)
+        integer, intent(out) :: ierr                  ! Código de erro (0 = sucesso)
+        
+        ! Variáveis locais
+        type(t_particles), pointer :: diag_particles
+        type(t_vdf_report), pointer :: report
+        type(t_vdf_report_item), pointer :: item
+        character(len=:), allocatable :: quant, details
+        integer :: pos, item_type, direction, id
+        logical :: found, is_tavg
+        integer, dimension(2) :: gipos
+        integer ::  n_dimensions 
+        logical :: found_name
+        
+        ! Inicializa ponteiros e variáveis
+        ierr = 0
+        found_name = .false.
+
+        diag_particles => sim%part  ! Start with particle 
+
+        report => diag_particles%reports
+
+        n_dimensions = sim%g_space%x_dim ! Sets number of dimensions for spacial averages
+        
+        ! Passo 1: Parse da especificação do relatório
+        pos = index(report_spec, ',')
+        if (pos > 0) then
+            quant = report_spec(1:pos-1)        ! Assign substring first
+            quant = trim(adjustl(quant))        ! Then trim/adjust
+            details = report_spec(pos+1:)       ! Assign substring first
+            details = trim(adjustl(details))    ! Then trim/adjust
+        else
+            quant = trim(adjustl(report_spec))
+            details = ""
+        end if
+        
+        ! Passo 2: Encontrar o relatório principal (quantidade)
+        found = .false.
+        do while (associated(report) .and. .not. found)
+            if (root(sim%no_co)) then
+                print *, "DEBUG - Found: ", report%name
+            endif
+            if (trim(report%name) == quant) then
+                found = .true.
+                exit
+            end if
+            report => report%next
+        end do
+        
+        if (.not. found) then
+            ierr = -1  ! Relatório não encontrado
+            return
+        end if
+        
+        ! Passo 3: Parse dos detalhes (se existirem)
+        call parse_report_spec(report_spec, quant, details, item_type, direction, gipos, is_tavg)
+        
+       ! Passo 4: Encontrar item específico
+        if (item_type > 0) then
+            found = .false.
+            item => report%list
+            do while (associated(item) .and. .not. found)
+                if (item%type == item_type) then
+                    if (item_type == p_line .or. item_type == p_slice) then
+                        ! Corrigido: usar .eqv. para lógicos
+                        if (item%direction == direction .and. &
+                            all(item%gipos == gipos) .and. &
+                            item%tavg .eqv. is_tavg) then
+                            found = .true.
+                            exit
+                        end if
+                    else
+                        ! Corrigido: usar .eqv. para lógicos
+                        if (item%tavg .eqv. is_tavg) then
+                            found = .true.
+                            exit
+                        end if
+                    end if
+                end if
+                item => item%next
+            end do
+        end if
+        
+        ! Passo 5: Aplicar modificações conforme o comando
+        select case (trim(command_name))
+            ! Comandos globais (afetam todo o relatório)
+            case ("ndump_fac")
+                report%ndump(p_full) = new_value(1)
+            case ("ndump_fac_ave")
+                report%ndump(p_savg) = new_value(1)
+                report%ndump(p_senv) = new_value(1)
+            case ("ndump_fac_lineout")
+                report%ndump(p_line) = new_value(1)
+                report%ndump(p_slice) = new_value(1)
+            
+            ! Outras frequências de dump
+
+
+            ! Comandos para itens específicos
+
+            case ("n_ave")
+                if (size(new_value) >= n_dimensions) then
+                    report%n_ave(1:n_dimensions) = new_value(1:n_dimensions)
+                else
+                    ierr = -3  ! Tamanho inválido
+                    if (mpi_node() == 0) then
+                        print *, "DEBUG - Invalid size for n_ave in steering_emf_diag"
+                    endif
+                end if
+            case ("n_tavg")
+                report%n_tavg = new_value(1)
+                if (report%n_tavg > 0 .and. .not. associated(report%tavg_data%f1)) then
+                    call report%tavg_data%new( &
+                        sim%grid%x_dim, &       ! Dimensão espacial
+                        1, &                    ! f_dim
+                        sim%grid%g_nx, &        ! nx
+                        sim%emf%e%gc_num(), &   ! gc_num (CORRECTED)
+                        sim%emf%e%dx(), &       ! dx
+                        .true. &                ! zero
+                    )
+                endif
+
+            case ("gipos")
+                if (associated(item) .and. size(new_value) >= size(item%gipos)) then
+                    item%gipos = new_value(1:size(item%gipos))
+                else
+                    ierr = -4  ! Item inválido ou tamanho incorreto
+                    if (mpi_node() == 0) then
+                        print *, "DEBUG - Invalid item or size mismatch for gipos in steering_emf_diag"
+                    endif
+                end if                
+
+            case ("prec")
+                report%prec = new_value(1)  ! Atualiza precisão do relatório
+
+            ! Add here code for other commands 
+
+            case ("low_jay_roundoff")
+                diag_particles%low_jay_roundoff = (new_value(1) /= 0) ! true 1 /false 0
+            
+            case ("ndump_fac_ene")
+                diag_particles%ndump_fac_ene = new_value(1)
+
+            case default
+                ierr = -5  ! Comando desconhecido
+        end select
+        
+    end subroutine steering_particles_diag
+
+    !-----------------------------------------------------------------------------------------
+    !       Add species reports
+    !-----------------------------------------------------------------------------------------
+    subroutine add_particles_report()
+        ! For now does nothing 
+    end subroutine add_particles_report
+
+    !<------------------------------------------------------->! 
+    !                 Auxiliary Functions
+    !            To encapsulate common tasks       
+    !<------------------------------------------------------->! 
+
+
+    subroutine parse_report_spec(report_spec, quant, details, item_type, direction, gipos, is_tavg)
+        character(*), intent(in) :: report_spec
+        character(:), allocatable, intent(out) :: quant, details
+        integer, intent(out) :: item_type, direction
+        integer, dimension(2), intent(out) :: gipos
+        logical, intent(out) :: is_tavg
+        
+        integer :: pos
+        
+        ! Inicialização
+        item_type = -1; direction = -1; gipos = -1; is_tavg = .false.
+        
+        ! Separa quantidade e detalhes
+        pos = index(report_spec, ',')
+        if (pos > 0) then
+            quant = trim(adjustl(report_spec(1:pos-1)))
+            details = trim(adjustl(report_spec(pos+1:)))
+        else
+            quant = trim(adjustl(report_spec))
+            details = ""
+        end if
+        
+        ! Analisa detalhes
+        if (len_trim(details) > 0) then
+            if (index(details, 'tavg') > 0) is_tavg = .true.
+            if (index(details, 'savg') > 0) item_type = p_savg
+            if (index(details, 'senv') > 0) item_type = p_senv
+            if (index(details, 'line') > 0) item_type = p_line
+            if (index(details, 'slice') > 0) item_type = p_slice
+            if (index(details, 'x1') > 0) direction = 1
+            if (index(details, 'x2') > 0) direction = 2
+            if (index(details, 'x3') > 0) direction = 3
+            
+            ! Extrai posições para linha/fatia
+            if (item_type == p_line .or. item_type == p_slice) then
+                pos = index(details, ',', back=.true.)
+                if (pos > 0) then
+                    read(details(pos+1:), *) gipos(1)
+                    if (item_type == p_line) then
+                        pos = index(details(1:pos-1), ',', back=.true.)
+                        if (pos > 0) read(details(pos+1:), *) gipos(2)
+                    end if
+                end if
+            end if
+        end if
+    end subroutine parse_report_spec
 
 end module m_workflow
