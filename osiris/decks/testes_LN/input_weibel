@@ -40,8 +40,7 @@ emf_bound {
 
 diag_emf {
   ndump_fac = 5,                     ! diagnostics at every 10 * 5 = 50 timesteps
-  reports = "b1", "b2",          ! save all magnetic field components
-            "b2, tavg, savg",
+  reports = "b1",          ! save all magnetic field components
 	    "e1, line, x2, 32", 
   n_ave(1:2) = 1,2,
   ndump_fac_ave = 2,
@@ -73,6 +72,7 @@ spe_bound {
 diag_species {
   ndump_fac = 1,
   reports = "q1",
+  rep_cell_avg = "charge",
 }
 
 species
@@ -92,6 +92,11 @@ spe_bound {
   ! No need to set because we are using periodic boundaries
 }
 
+diag_species {
+  ndump_fac = 1,
+  reports = "q1",
+}
+
 neutral {
   name = "Neutral",
   neutral_gas = "C",
@@ -100,7 +105,7 @@ neutral {
 diag_neutral
 {
   ndump_fac = 5,
-  reports = "neut_den", 
+  reports = "ion_charge", 
 }
 
 species

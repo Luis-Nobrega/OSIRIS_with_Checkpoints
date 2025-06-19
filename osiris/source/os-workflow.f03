@@ -24,9 +24,13 @@ module m_workflow !*!
     use m_neutral
     use m_diag_neutral
     use m_particles_define
+    use m_species_diagnostics
     use m_particles
     use m_species_define
     use m_restart, only: t_restart_handle
+
+    #include "os-config.h"
+    #include "os-preprocess.fpp"
 
     use m_emf_define ! para o p_extfld_none
     
@@ -303,15 +307,12 @@ contains
                             case ("diag_neutral")
 
                                 call parse_workflow_diagnostic(val, name, identifier, diag_command, diag_data, add_rep, diagnostic_ierr)
-                                    print *, "DEBUG ", name
                                     if (diagnostic_ierr == 0) then
                                         ! Convert string array to integer array 
                                     if (allocated(diag_data_int)) deallocate(diag_data_int)
-                                    print *, "DEBUG - 1", identifier
                                     call str_array_to_int(diag_data, diag_data_int, ierr)
                                         if (ierr == 0) then
                                             !!!!!!!!!!!!!! MUDAR ISTO
-                                            print *, "DEBUG - 2", identifier
                                             call add_neutral_report(sim, trim(identifier), name)
                                             call steering_neutral_diag(sim, trim(identifier), name, trim(diag_command), diag_data_int, ierr)
                                         end if
@@ -330,10 +331,8 @@ contains
                                             ! I need to find a way to differentiate 
                                             ! between species diagnostics - Contact Ricardo bt this
                                             ! ------------------------------------------------------ !
-                                            call add_species_report(sim, trim(identifier), name, "normal")
-                                            call add_species_report(sim, trim(identifier), name, "cell_avg")
-                                            call add_species_report(sim, trim(identifier), name, "udist")
-                                            call steering_species_diag(sim, trim(identifier), name, trim(diag_command), diag_data_int, ierr)
+                                            call add_species_report(sim, trim(identifier), name, add_rep)
+                                            call steering_species_diag(sim, trim(identifier), name, trim(diag_command), diag_data_int, add_rep, ierr)
                                         end if
                                     end if
 
@@ -897,6 +896,8 @@ contains
         
         if (.not. found) then
             ierr = -1  ! Relatório não encontrado
+            if (allocated(quant)) deallocate(quant)
+            if (allocated(details)) deallocate(details)
             return
         end if
         
@@ -980,6 +981,9 @@ contains
             case default
                 ierr = -5  ! Comando desconhecido
         end select
+
+        if (allocated(quant)) deallocate(quant)
+        if (allocated(details)) deallocate(details)
         
     end subroutine steering_neutral_diag
 
@@ -1065,15 +1069,18 @@ contains
     !-----------------------------------------------------------------------------------------
     !       Change neutral parameters through steering file
     !-----------------------------------------------------------------------------------------
-    subroutine steering_species_diag(sim, report_spec, particle_name, command_name, new_value, ierr)      
+    subroutine steering_species_diag(sim, report_spec, particle_name, command_name, new_value, averaged_quant, ierr)  
+
+        use m_species_diagnostics, only: p_report_quants, p_rep_udist ! get report quantifier    
         implicit none
         
         ! Argumentos
         class(t_simulation), intent(inout) :: sim
-        character(*), intent(in) :: particle_name      ! Nome da partíula ex: sodium, etc.
+        character(*), intent(in) :: particle_name      ! Nome da partícula ex: sodium, etc.
         character(*), intent(in) :: command_name      ! Nome do comando (ex: "ndump_fac", "n_ave", etc.)
         character(*), intent(in) :: report_spec       ! Especificação do relatório (ex: "e3", "e2, line, x1, 64, 96")
         integer, dimension(:), intent(in) :: new_value ! Novo valor (pode ser escalar ou array)
+        logical, intent(in) :: averaged_quant           ! Indica se é uma quantidade média (para n_ave)
         integer, intent(out) :: ierr                  ! Código de erro (0 = sucesso)
         
         ! Variáveis locais
@@ -1084,7 +1091,7 @@ contains
         integer :: pos, item_type, direction, id
         logical :: found, is_tavg
         integer, dimension(2) :: gipos
-        integer ::  n_dimensions 
+        integer :: n_dimensions 
         logical :: found_name
         
         ! Inicializa ponteiros e variáveis
@@ -1093,6 +1100,7 @@ contains
 
         diag_species => sim%part%species  ! Start with first species in list
 
+        ! Find the species with the given name
         do while (associated(diag_species))
             if (trim(diag_species%name) == trim(particle_name)) then
                 found_name = .true.
@@ -1109,11 +1117,9 @@ contains
             return
         end if
 
-        report => diag_species%diag%reports
-
         n_dimensions = sim%g_space%x_dim ! Sets number of dimensions for spacial averages
         
-        ! Passo 1: Parse da especificação do relatório
+        ! Step 1: Parse report specification
         pos = index(report_spec, ',')
         if (pos > 0) then
             quant = report_spec(1:pos-1)        ! Assign substring first
@@ -1125,12 +1131,16 @@ contains
             details = ""
         end if
         
-        ! Passo 2: Encontrar o relatório principal (quantidade)
+        ! Step 2: Find the appropriate report list based on quant
         found = .false.
+        
+        if (averaged_quant) then         
+            report => diag_species%diag%rep_cell_avg
+        else 
+            report => diag_species%diag%reports
+        end if
+        
         do while (associated(report) .and. .not. found)
-            if (root(sim%no_co)) then
-                print *, "DEBUG - Found: ", report%name
-            endif
             if (trim(report%name) == quant) then
                 found = .true.
                 exit
@@ -1138,22 +1148,33 @@ contains
             report => report%next
         end do
         
+        ! If still not found, check udist reports
+        if (.not. found) then
+            report => diag_species%diag%rep_udist
+            do while (associated(report) .and. .not. found)
+                if (trim(report%name) == quant) then
+                    found = .true.
+                    exit
+                end if
+                report => report%next
+            end do
+        end if
+        
         if (.not. found) then
             ierr = -1  ! Relatório não encontrado
             return
         end if
         
-        ! Passo 3: Parse dos detalhes (se existirem)
+        ! Step 3: Parse details (if they exist)
         call parse_report_spec(report_spec, quant, details, item_type, direction, gipos, is_tavg)
         
-       ! Passo 4: Encontrar item específico
+        ! Step 4: Find specific item
         if (item_type > 0) then
             found = .false.
             item => report%list
             do while (associated(item) .and. .not. found)
                 if (item%type == item_type) then
                     if (item_type == p_line .or. item_type == p_slice) then
-                        ! Corrigido: usar .eqv. para lógicos
                         if (item%direction == direction .and. &
                             all(item%gipos == gipos) .and. &
                             item%tavg .eqv. is_tavg) then
@@ -1161,7 +1182,6 @@ contains
                             exit
                         end if
                     else
-                        ! Corrigido: usar .eqv. para lógicos
                         if (item%tavg .eqv. is_tavg) then
                             found = .true.
                             exit
@@ -1172,9 +1192,9 @@ contains
             end do
         end if
         
-        ! Passo 5: Aplicar modificações conforme o comando
+        ! Step 5: Apply modifications according to command
         select case (trim(command_name))
-            ! Comandos globais (afetam todo o relatório)
+            ! Global commands (affect whole report)
             case ("ndump_fac")
                 report%ndump(p_full) = new_value(1)
             case ("ndump_fac_ave")
@@ -1184,10 +1204,9 @@ contains
                 report%ndump(p_line) = new_value(1)
                 report%ndump(p_slice) = new_value(1)
             
-            ! Outras frequências de dump
-
+            ! Other dump frequencies
             case ("ndump_fac_ene")
-                diag_species%diag%ndump_fac_ene  = new_value(1)
+                diag_species%diag%ndump_fac_ene = new_value(1)
             case ("ndump_fac_heatflux")
                 diag_species%diag%ndump_fac_heatflux = new_value(1)
             case ("ndump_fac_temp")
@@ -1195,27 +1214,26 @@ contains
             case ("ndump_fac_raw")  
                 diag_species%diag%ndump_fac_raw = new_value(1)
 
-            ! Comandos para itens específicos
-
+            ! Commands for specific items
             case ("n_ave")
                 if (size(new_value) >= n_dimensions) then
                     report%n_ave(1:n_dimensions) = new_value(1:n_dimensions)
                 else
-                    ierr = -3  ! Tamanho inválido
+                    ierr = -3  ! Invalid size
                     if (mpi_node() == 0) then
-                        print *, "DEBUG - Invalid size for n_ave in steering_emf_diag"
+                        print *, "DEBUG - Invalid size for n_ave in steering_species_diag"
                     endif
                 end if
             case ("n_tavg")
                 report%n_tavg = new_value(1)
                 if (report%n_tavg > 0 .and. .not. associated(report%tavg_data%f1)) then
                     call report%tavg_data%new( &
-                        sim%grid%x_dim, &       ! Dimensão espacial
-                        1, &                    ! f_dim
-                        sim%grid%g_nx, &        ! nx
-                        sim%emf%e%gc_num(), &   ! gc_num (CORRECTED)
-                        sim%emf%e%dx(), &       ! dx
-                        .true. &                ! zero
+                        sim%grid%x_dim, &       ! Spatial dimension
+                        1, &                     ! f_dim
+                        sim%grid%g_nx, &         ! Global grid size
+                        sim%emf%e%gc_num(), &    ! Guard cells
+                        sim%emf%e%dx(), &        ! Cell size
+                        .true. &                 ! Zero the field
                     )
                 endif
 
@@ -1223,17 +1241,16 @@ contains
                 if (associated(item) .and. size(new_value) >= size(item%gipos)) then
                     item%gipos = new_value(1:size(item%gipos))
                 else
-                    ierr = -4  ! Item inválido ou tamanho incorreto
+                    ierr = -4  ! Invalid item or size mismatch
                     if (mpi_node() == 0) then
-                        print *, "DEBUG - Invalid item or size mismatch for gipos in steering_emf_diag"
+                        print *, "DEBUG - Invalid item or size mismatch for gipos in steering_species_diag"
                     endif
                 end if                
 
             case ("prec")
-                report%prec = new_value(1)  ! Atualiza precisão do relatório
+                report%prec = new_value(1)  ! Update report precision
 
-            ! Add here code for other commands 
-
+            ! Other commands
             case ("raw_gamma_limit")
                 diag_species%diag%raw_gamma_limit = new_value(1)
             case ("raw_fraction")
@@ -1244,7 +1261,7 @@ contains
                 diag_species%diag%n_start_tracks = new_value(1)
 
             case default
-                ierr = -5  ! Comando desconhecido
+                ierr = -5  ! Unknown command
         end select
         
     end subroutine steering_species_diag
@@ -1252,22 +1269,28 @@ contains
     !-----------------------------------------------------------------------------------------
     !       Add species reports
     !-----------------------------------------------------------------------------------------
-    subroutine add_species_report(sim, input_string, name, report_type)
+    subroutine add_species_report(sim, input_string, name, averaged_quant)
+
+        use m_species_diagnostics, only: p_report_quants, p_rep_udist ! get report quantifiers
+
+        implicit none
+
         type(t_restart_handle) :: restart_handle
         character(len=*), intent(in) :: input_string
         class(t_simulation), intent(inout) :: sim
-        integer :: ierr
-        character(*), intent(in) :: name
-        character(*), intent(in) :: report_type  ! "normal", "cell_avg", or "udist"
+        logical, intent(in) :: averaged_quant  ! If true, report is averaged
+        integer :: ierr, report_id, i, idx
+        character(len=*), intent(in) :: name
+        character(len=:), allocatable :: parsed_string
         type(t_species), pointer :: type_species
         type(t_diag_species), pointer :: diag_species
-
         type(t_vdf_report), pointer :: report
         logical :: found_name
 
         ! Inicializa ponteiros e variáveis
         ierr = 0
         found_name = .false.
+        report_id = 0 ! default value 
 
         type_species => sim%part%species  ! Start with first species in list
 
@@ -1285,37 +1308,70 @@ contains
             if (mpi_node() == 0) then
                 print *, "DEBUG - Species particle id not found: ", trim(name)
             end if
+            if (allocated(parsed_string)) deallocate(parsed_string)
             return
         end if
 
         ! Get the diag_species structure from the species
         diag_species => type_species%diag
 
+        idx = index(input_string, ",")
+        if (idx > 0) then
+            parsed_string = input_string(1:idx-1)  ! Get the part before the comma
+            parsed_string = trim(adjustl(parsed_string))  ! Trim leading spaces
+        else
+            parsed_string = input_string  ! No comma found, use the whole string
+        end if
+
+        ! Indentify which report type to add based on the input string
+
+        do i = 1, size(p_report_quants)
+            if (trim(p_report_quants(i)) == parsed_string) then
+                if (averaged_quant) then
+                    report_id = 2  ! 2 for averaged reports
+                else
+                    report_id = 1  ! 1 for full reports
+                end if
+                exit
+            end if
+        end do
+
+        if (report_id == 0) then 
+            do i = 1, size(p_rep_udist)
+                if (trim(p_rep_udist(i)) == parsed_string) then
+                    report_id = 3  ! 3 for udist reports
+                    exit
+                end if
+            end do
+        end if 
+
+        if (allocated(parsed_string)) deallocate(parsed_string)
+
         ! Select the appropriate report list based on report_type
-        select case (trim(report_type))
-            case ("normal")
+        select case (report_id)
+            case (1)
                 call add_report(diag_species%reports, trim(input_string), diag_species%report_quants, &
                             sim%g_space%x_dim, ierr)
                 report => diag_species%reports
-            case ("cell_avg")
+            case (2)
                 call add_report(diag_species%rep_cell_avg, trim(input_string), diag_species%report_quants, &
                             sim%g_space%x_dim, ierr)
                 report => diag_species%rep_cell_avg
-            case ("udist")
+            case (3)
                 call add_report(diag_species%rep_udist, trim(input_string), diag_species%report_quants, &
                             sim%g_space%x_dim, ierr)
                 report => diag_species%rep_udist
             case default
                 ierr = 1
                 if (mpi_node() == 0) then
-                    print *, "Invalid report type: ", trim(report_type)
+                    print *, "Invalid report type: ", report_id
                 endif
                 return
         end select
 
         ! Initialize the report if it was added successfully
         if (ierr == 0) then
-            ! Initialize diagnostics for this species
+            ! Initialize ALL diagnostics for this species
             call diag_species % init( &
                 trim(type_species%name), &          ! spec_name
                 sim%g_space%x_dim, &                ! n_x_dim
@@ -1347,13 +1403,14 @@ contains
         ! Report status
         if (ierr /= 0) then
             if (mpi_node() == 0) then
-                print *, "Error adding ", trim(report_type), " report: ", trim(input_string)
+                print *, "Error adding report: ", report_id
             endif
         else
             if (mpi_node() == 0) then
-                print *, "Added new ", trim(report_type), " report: ", trim(input_string)
+                print *, "Added new report: ", report_id
             endif
         endif
+
     end subroutine add_species_report
 
     !<----------------------PARTICLES------------------------------>! 
