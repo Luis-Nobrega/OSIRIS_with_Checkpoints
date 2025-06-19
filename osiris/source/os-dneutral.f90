@@ -42,6 +42,14 @@ module m_diag_neutral
     !  diagnostics
     type(t_vdf_report), pointer :: reports
 
+    !*! diagnostic parameters for consistency with other diagnostics
+    character(len = p_max_diag_len), dimension(:), pointer :: report_quants => null()
+
+    contains 
+
+    procedure :: avail_report_quants => avail_report_quants_neutral !*!
+    procedure :: init_report_quants  => init_report_quants_neutral !*!
+
   end type t_diag_neutral
 
   interface read_nml
@@ -63,7 +71,7 @@ module m_diag_neutral
 !       declare things that should be public
   public :: t_diag_neutral, setup, cleanup
   public :: report, read_nml
-  public :: p_ion_charge, p_neut_den
+  public :: p_ion_charge, p_neut_den 
 
  contains
 
@@ -125,8 +133,10 @@ subroutine read_nml_diag_neutral( this, input_file)
   ndump_fac_all(p_line)  = ndump_fac_lineout
   ndump_fac_all(p_slice) = ndump_fac_lineout
 
+  call this % init_report_quants( ) !*!
+
   ! process reports
-  call new( this%reports, reports, p_report_quants, &
+  call new( this%reports, reports, this%report_quants, & !*! changed this%report_quants
             ndump_fac_all, n_ave, n_tavg, prec, &
             p_x_dim, ierr )
   if ( ierr /= 0 ) then
@@ -272,14 +282,36 @@ end subroutine report_diag_neutral
 subroutine cleanup_diag_neutral( this )
 !-----------------------------------------------------------------------------------------
 
+
   implicit none
 
   type( t_diag_neutral ),       intent(inout) :: this
 
   call cleanup( this%reports )
 
+  deallocate( this % report_quants ) !*!
+
 end subroutine cleanup_diag_neutral
 !-----------------------------------------------------------------------------------------
+
+!---------------------------------------------------
+! Funções para gerenciar report_quants
+!---------------------------------------------------
+function avail_report_quants_neutral( this ) result(n)
+  class( t_diag_neutral ), intent(in) :: this
+  integer :: n
+  n = size( p_report_quants )
+end function avail_report_quants_neutral
+
+subroutine init_report_quants_neutral( this )
+  class( t_diag_neutral ), intent(inout) :: this
+  if ( .not. associated( this % report_quants ) ) then
+    allocate( this % report_quants( this % avail_report_quants( ) ) )
+    this % report_quants = p_report_quants
+  endif
+end subroutine init_report_quants_neutral
+
+
 
 end module m_diag_neutral
 

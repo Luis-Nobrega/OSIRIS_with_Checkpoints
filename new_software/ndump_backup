@@ -230,8 +230,43 @@
     !-----------------------------------------------------------------------------------------
     !       Add emf reports
     !-----------------------------------------------------------------------------------------
-    subroutine add_neutrals_report()
 
-    end subroutine add_neutrals_report
 
-    
+    subroutine add_neutral_report(sim, input_string, particle_name)
+        character(len=*), intent(in) :: input_string
+        class(t_simulation), intent(inout) :: sim
+        character(*), intent(in) :: particle_name 
+        integer :: ierr, id
+        type(t_diag_neutral), pointer :: diag_neutral
+        type(t_vdf_report), pointer :: report
+        logical :: found_name
+        character(len=10), dimension(:), pointer :: report_quants
+
+        found_name = .false.
+
+        do id = 1, size(sim%part%neutral)
+            if (trim(sim%part%neutral(id)%name) == trim(particle_name)) then
+            diag_neutral => sim%part%neutral(id)%diag
+            found_name = .true.
+            exit
+            end if
+        end do
+
+        if (.not. found_name) then
+            ierr = 1
+            if (mpi_node() == 0) then
+            print *, "DEBUG - Neutral particle id not found-> Couldn't add diag: ", trim(particle_name)
+            end if
+            return
+        end if
+
+        ! Get report quantities through pointer assignment
+        report_quants => diag_neutral%avail_report_quants()
+
+        ! Use the quantities to add the report
+        call add_report(diag_neutral%reports, trim(input_string), report_quants, &
+                        sim%g_space%x_dim, ierr)
+
+        ! Rest of the subroutine remains the same...
+        ! [Keep all the existing code for tavg_data initialization and error handling]
+        end subroutine add_neutral_report

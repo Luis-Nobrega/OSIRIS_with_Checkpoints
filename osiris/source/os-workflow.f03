@@ -26,6 +26,7 @@ module m_workflow !*!
     use m_particles_define
     use m_particles
     use m_species_define
+    use m_restart, only: t_restart_handle
 
     use m_emf_define ! para o p_extfld_none
     
@@ -302,14 +303,16 @@ contains
                             case ("diag_neutral")
 
                                 call parse_workflow_diagnostic(val, name, identifier, diag_command, diag_data, add_rep, diagnostic_ierr)
-
+                                    print *, "DEBUG ", name
                                     if (diagnostic_ierr == 0) then
                                         ! Convert string array to integer array 
                                     if (allocated(diag_data_int)) deallocate(diag_data_int)
+                                    print *, "DEBUG - 1", identifier
                                     call str_array_to_int(diag_data, diag_data_int, ierr)
                                         if (ierr == 0) then
                                             !!!!!!!!!!!!!! MUDAR ISTO
-                                            !call add_current_report(sim, trim(identifier))
+                                            print *, "DEBUG - 2", identifier
+                                            call add_neutral_report(sim, trim(identifier), name)
                                             call steering_neutral_diag(sim, trim(identifier), name, trim(diag_command), diag_data_int, ierr)
                                         end if
                                     end if
@@ -322,8 +325,14 @@ contains
                                     if (allocated(diag_data_int)) deallocate(diag_data_int)
                                     call str_array_to_int(diag_data, diag_data_int, ierr)
                                         if (ierr == 0) then
-                                            !!!!!!!!!!!!!! MUDAR ISTO
-                                            !call add_species_report(sim, trim(identifier))
+                                            ! ------------------------------------------------------ !
+                                            ! WARNING: This is a temporary solution
+                                            ! I need to find a way to differentiate 
+                                            ! between species diagnostics - Contact Ricardo bt this
+                                            ! ------------------------------------------------------ !
+                                            call add_species_report(sim, trim(identifier), name, "normal")
+                                            call add_species_report(sim, trim(identifier), name, "cell_avg")
+                                            call add_species_report(sim, trim(identifier), name, "udist")
                                             call steering_species_diag(sim, trim(identifier), name, trim(diag_command), diag_data_int, ierr)
                                         end if
                                     end if
@@ -336,9 +345,10 @@ contains
                                     if (allocated(diag_data_int)) deallocate(diag_data_int)
                                     call str_array_to_int(diag_data, diag_data_int, ierr)
                                         if (ierr == 0) then
-                                            !!!!!!!!!!!!!! MUDAR ISTO
+                                            !DIABLED DUE TO STRUCTURE PROBLEM
+                                            print *, "DEBUG - Particles diagnostics are disabled for now"
                                             !call add_particles_report(sim, trim(identifier))
-                                            call steering_particles_diag(sim, trim(identifier), trim(diag_command), diag_data_int, ierr)
+                                            !call steering_particles_diag(sim, trim(identifier), trim(diag_command), diag_data_int, ierr)
                                         end if
                                     end if
                                     
@@ -560,7 +570,7 @@ contains
 
         ! Initialize the report if it was added successfully
         if (ierr == 0) then
-            ! WARNING THIS MAY CAUSE PROBLEMS AND IS EXPERIMENTAL
+            ! WARNING THIS MAY CAUSE PROBLEMS AND IS EXPERIMENTAL - Reinitialize the emf diag structure
             call sim % emf % diag % init( sim % emf %ext_fld == p_extfld_none, &
                 sim % emf %part_fld_alloc, interpolation( sim%part ))
 
@@ -802,7 +812,6 @@ contains
                 print *, "Added new CURRENT report: ", trim(input_string)
             endif
         endif
-
     end subroutine add_current_report
 
     !<------------------------------------------------------->! 
@@ -977,10 +986,79 @@ contains
     !-----------------------------------------------------------------------------------------
     !       Add neutral reports
     !-----------------------------------------------------------------------------------------
-    subroutine add_neutral_report()
-        ! For now does nothing 
-    end subroutine add_neutral_report
+    subroutine add_neutral_report(sim, input_string, particle_name)
+        character(len=*), intent(in) :: input_string
+        class(t_simulation), intent(inout) :: sim
+        integer :: ierr, id
+        character(len=*), intent(in) :: particle_name ! Nome da partícula neutra (ex: sodium, etc.)
+        type(t_diag_neutral), pointer :: diag_neutral
+        type(t_vdf_report), pointer :: report
+        logical :: found_name
 
+        found_name = .false.
+
+        ! Find which neutral particle to add the report for
+        do id = 1, size(sim%part%neutral)
+            print *, "DEBUG - ", particle_name, " Name: ", trim(sim%part%neutral(id)%name)
+            
+            if (trim(sim%part%neutral(id)%name) == trim(particle_name)) then
+                diag_neutral => sim%part%neutral(id)%diag ! define diag neutral 
+                found_name = .true.
+                exit
+            end if
+        end do
+
+        if (.not. found_name) then
+            ierr = 1
+            if (mpi_node() == 0) then
+                print *, "DEBUG - Neutral particle id not found: ", trim(particle_name)
+            end if
+            return
+        end if
+
+        ! Use the existing add_report routine to add the new report
+        call add_report( diag_neutral%reports, trim(input_string), diag_neutral%report_quants, &
+                        sim%g_space%x_dim, ierr )
+
+        ! Initialize the report if it was added successfully
+        if (ierr == 0) then
+            ! WARNING THIS MAY CAUSE PROBLEMS AND IS EXPERIMENTAL - Reinitialize the init diag structure
+            call setup(sim % part % neutral(id) % diag, particle_name, interpolation(sim%part))
+            !call sim % part % neutral(id) % diag % setup( particle_name, interpolation( sim%part ))
+
+            ! Inicializa tavg_data se necessário
+            report => diag_neutral%reports
+            do while (associated(report))
+                if (trim(report%name) == trim(input_string)) then
+
+                    if (report%n_tavg > 0) then
+                        ! Inicializa tavg_data com parâmetros da grade
+                        call report%tavg_data%new( &
+                            sim%grid%x_dim, &       ! Dimensão espacial
+                            1, &                     ! f_dim (campo escalar)
+                            sim%grid%g_nx, &         ! Tamanho da grade global
+                            sim%emf%e%gc_num(), &    ! Células guarda
+                            sim%emf%e%dx(), &        ! Tamanho do célula
+                            .true. &                 ! Zero o campo
+                        )
+                    endif
+                    exit
+                endif
+                report => report%next
+            enddo
+        end if
+
+        if (ierr /= 0) then
+            if (mpi_node() == 0) then
+                print *, "Error adding NEUTRAL report: ", trim(input_string)
+            endif
+        else
+            if (mpi_node() == 0) then
+                print *, "Added new NEUTRAL report: ", trim(input_string)
+            endif
+        endif
+        
+    end subroutine add_neutral_report
 
     !<----------------------SPECIES------------------------------>! 
 
@@ -1174,14 +1252,114 @@ contains
     !-----------------------------------------------------------------------------------------
     !       Add species reports
     !-----------------------------------------------------------------------------------------
-    subroutine add_species_report()
-        ! For now does nothing 
+    subroutine add_species_report(sim, input_string, name, report_type)
+        type(t_restart_handle) :: restart_handle
+        character(len=*), intent(in) :: input_string
+        class(t_simulation), intent(inout) :: sim
+        integer :: ierr
+        character(*), intent(in) :: name
+        character(*), intent(in) :: report_type  ! "normal", "cell_avg", or "udist"
+        type(t_species), pointer :: type_species
+        type(t_diag_species), pointer :: diag_species
+
+        type(t_vdf_report), pointer :: report
+        logical :: found_name
+
+        ! Inicializa ponteiros e variáveis
+        ierr = 0
+        found_name = .false.
+
+        type_species => sim%part%species  ! Start with first species in list
+
+        ! As there is a linked list of species, we need to find the one with the given name
+        do while (associated(type_species))
+            if (trim(type_species%name) == trim(name)) then
+                found_name = .true.
+                exit
+            end if
+            type_species => type_species%next  ! Move to next species in list
+        end do
+
+        if (.not. found_name) then
+            ierr = 1
+            if (mpi_node() == 0) then
+                print *, "DEBUG - Species particle id not found: ", trim(name)
+            end if
+            return
+        end if
+
+        ! Get the diag_species structure from the species
+        diag_species => type_species%diag
+
+        ! Select the appropriate report list based on report_type
+        select case (trim(report_type))
+            case ("normal")
+                call add_report(diag_species%reports, trim(input_string), diag_species%report_quants, &
+                            sim%g_space%x_dim, ierr)
+                report => diag_species%reports
+            case ("cell_avg")
+                call add_report(diag_species%rep_cell_avg, trim(input_string), diag_species%report_quants, &
+                            sim%g_space%x_dim, ierr)
+                report => diag_species%rep_cell_avg
+            case ("udist")
+                call add_report(diag_species%rep_udist, trim(input_string), diag_species%report_quants, &
+                            sim%g_space%x_dim, ierr)
+                report => diag_species%rep_udist
+            case default
+                ierr = 1
+                if (mpi_node() == 0) then
+                    print *, "Invalid report type: ", trim(report_type)
+                endif
+                return
+        end select
+
+        ! Initialize the report if it was added successfully
+        if (ierr == 0) then
+            ! Initialize diagnostics for this species
+            call diag_species % init( &
+                trim(type_species%name), &          ! spec_name
+                sim%g_space%x_dim, &                ! n_x_dim
+                0, &                                ! ndump_fac (default value)
+                interpolation( sim%part ), &        ! interpolation
+                .false., &                          ! restart
+                restart_handle )                    ! restart_handle
+
+            ! Find the newly added report and initialize time averaging if needed
+            do while (associated(report))
+                if (trim(report%name) == trim(input_string)) then
+                    if (report%n_tavg > 0) then
+                        ! Initialize tavg_data with grid parameters
+                        call report%tavg_data%new( &
+                            sim%grid%x_dim, &       ! Spatial dimension
+                            1, &                     ! f_dim (scalar field)
+                            sim%grid%g_nx, &         ! Global grid size
+                            sim%emf%e%gc_num(), &    ! Guard cells
+                            sim%emf%e%dx(), &        ! Cell size
+                            .true. &                 ! Zero the field
+                        )
+                    endif
+                    exit
+                endif
+                report => report%next
+            enddo
+        end if
+
+        ! Report status
+        if (ierr /= 0) then
+            if (mpi_node() == 0) then
+                print *, "Error adding ", trim(report_type), " report: ", trim(input_string)
+            endif
+        else
+            if (mpi_node() == 0) then
+                print *, "Added new ", trim(report_type), " report: ", trim(input_string)
+            endif
+        endif
     end subroutine add_species_report
 
     !<----------------------PARTICLES------------------------------>! 
 
     !-----------------------------------------------------------------------------------------
-    !       Change PARTICLE parameters through steering file
+    !       Change PARTICLE parameters through steering file - DISABLED FOR NOW !!!!!!!
     !-----------------------------------------------------------------------------------------
     subroutine steering_particles_diag(sim, report_spec, command_name, new_value, ierr)      
         implicit none
@@ -1340,10 +1518,10 @@ contains
     end subroutine steering_particles_diag
 
     !-----------------------------------------------------------------------------------------
-    !       Add species reports
+    !       Add particles reports 
     !-----------------------------------------------------------------------------------------
     subroutine add_particles_report()
-        ! For now does nothing 
+        ! DISABLED FOR NOW
     end subroutine add_particles_report
 
     !<------------------------------------------------------->! 
