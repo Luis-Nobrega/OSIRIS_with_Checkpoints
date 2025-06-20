@@ -13,10 +13,15 @@ restart_dir="/RE"
 osiris_finished=0
 max_number_of_restarts=5
 restart_count=0
+max_queue_time=120 #(in seconds)
 
 # --------------------------------------------#
 #               Source code                   #
 # --------------------------------------------#
+job_state=""
+search_files=0
+started=1
+
 echo "==> Removendo ficheiros .out e .err "
 rm -f *.out.* 2>/dev/null
 rm -f *.err.* 2>/dev/null
@@ -28,62 +33,92 @@ while [[ $osiris_finished -eq 0 && $restart_count -lt $max_number_of_restarts ]]
     JOBID=$(sbatch --parsable $submit_job_name)
     echo "==> Job ID: $JOBID"
 
-    # Ficheiros de log esperados
-    err_file="slurm-${JOBID}.err"
-    out_file="slurm-${JOBID}.out"
-    
-    # Monitoriza continuamente o ficheiro .err
-    error_detected=0
-    while squeue -j "$JOBID" -h >/dev/null; do
+    # Wait for job to start/finish
+    while [ $search_files -eq 0 ]; do
         sleep 10
+        job_state=$(squeue -j "$JOBID" -h -o "%t" 2>/dev/null)
         
-        # Verifica se o .err existe e tem conteúdo
-        if [[ -s "$err_file" ]]; then
-            echo "==> ERRO: Ficheiro $err_file não está vazio!"
-            error_detected=1
-            scancel "$JOBID"  # Cancela o job imediatamente
+        # Job no longer in queue
+        if [ -z "$job_state" ]; then
+            echo "==> Job concluído ou removido da fila"
+            started=0
+            break
+        fi
+        
+        echo "==> Estado do job: $job_state"
+
+        if [[ "$job_state" == "PD" ]]; then
+            echo "Job está pendente (PD)"
+        elif [[ "$job_state" == "R" ]]; then
+            echo "Job está a correr (R)"
+            # Job started - exit monitoring loop
+            search_files=1
+        else
+            echo "Estado desconhecido: $job_state"
+            started=0
             break
         fi
     done
 
-    # Processa o estado após o job terminar
+    if [[ $started -eq 0 ]]; then
+        echo "==> Job não iniciado corretamente. Abortando."
+        break
+    fi
+
+    # Find log files using JOBID
+    err_file=$(find . -type f -name "*.err.${JOBID}" | head -n 1)
+    out_file=$(find . -type f -name "*.out.${JOBID}" | head -n 1)
+    
+    # Wait for job completion
+    while squeue -j "$JOBID" &>/dev/null; do
+        sleep 10
+    done
+
+    echo "==> Rotina terminada, verificando ficheiros de log..."
+    error_detected=0
+
+    # Check error file
+    if [[ -s "$err_file" ]]; then
+        echo "==> ERRO: Ficheiro $err_file não está vazio!"
+        if grep -q "CANCELLED" "$err_file"; then
+            echo "==> ERRO: Job foi CANCELADO!"
+            error_detected=1
+        else 
+            echo "==> ERRO desconhecido em $err_file"
+            error_detected=1
+        fi
+    fi
+
+    # Process results
     if [[ $error_detected -eq 1 ]]; then
-        echo "==> Processo interrompido devido a erros."
-        echo "==> Aguardando 30 segundos antes do restart..."
-        sleep 30
+        echo "==> Processo interrompido devido a erro."
+        # Rename log files
+        [[ -f "$err_file" ]] && mv "$err_file" "${err_file}.$restart_count"
+        [[ -f "$out_file" ]] && mv "$out_file" "${out_file}.$restart_count"
         
-        # Renomeia os ficheiros para evitar nova leitura
-        if [[ -f "$err_file" ]]; then
-            mv "$err_file" "${err_file}.$restart_count"
-        fi
-        if [[ -f "$out_file" ]]; then
-            mv "$out_file" "${out_file}.$restart_count"
-        fi
-        
-        # Verifica restart
-        if [[ -d "$restart_dir" ]] && [[ -n "$(ls -A "$restart_dir")" ]]; then
+        # Check restart feasibility
+        if [[ -d "$restart_dir" && -n "$(ls -A "$restart_dir")" ]]; then
             ((restart_count++))
-            echo "==> Restart possível. Restarts: $restart_count"
+            echo "==> Restart possível. Total: $restart_count"
             sed -i "s|\($osiris_executable_name\)|\1 -r|" $submit_job_name
         else
             echo "==> Diretório de restart inválido. Abortando."
             break
         fi
     else
-        # Verifica conclusão normal
+        # Check normal completion
         if grep -q "Osiris run completed normally" "$out_file" 2>/dev/null; then
             echo "==> Osiris terminou corretamente."
             osiris_finished=1
         else
             echo "==> Osiris NÃO terminou corretamente."
-            
-            # Renomeia os ficheiros mesmo em falha sem erro explícito
+            # Rename logs for debugging
             [[ -f "$err_file" ]] && mv "$err_file" "${err_file}.$restart_count"
             [[ -f "$out_file" ]] && mv "$out_file" "${out_file}.$restart_count"
             
-            if [[ -d "$restart_dir" ]] && [[ -n "$(ls -A "$restart_dir")" ]]; then
+            if [[ -d "$restart_dir" && -n "$(ls -A "$restart_dir")" ]]; then
                 ((restart_count++))
-                echo "==> Restart possível. Restarts: $restart_count"
+                echo "==> Restart possível. Total: $restart_count"
                 sed -i "s|\($osiris_executable_name\)|\1 -r|" $submit_job_name
             else
                 echo "==> Diretório de restart inválido. Abortando."
@@ -91,6 +126,10 @@ while [[ $osiris_finished -eq 0 && $restart_count -lt $max_number_of_restarts ]]
             fi
         fi
     fi
+    
+    # Reset for next iteration
+    search_files=0
+    started=1
 done
 
 if [[ $osiris_finished -eq 0 ]]; then

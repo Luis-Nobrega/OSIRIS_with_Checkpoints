@@ -236,9 +236,13 @@ contains
                         print*, "DEBUG - Checkpoint skipped (existing checkpoint)"
                     end if
 
-                 case ("tmax")
+                case ("tmax")
                     ! Change the simulation maximum time
                     call set_max_time(sim, get_value(trim(keys(i))) , ierr)
+
+                case ("omega_p0")
+                    ! Change the plasma frequency
+                    call set_omega_p0(sim, get_value(trim(keys(i))), ierr)
 
                 case ("restart")
                     ! IN PROGRESS ????????????????????????????????????
@@ -1665,6 +1669,9 @@ contains
     !       It will check if n_ave and n_tavg are set correctly
     !-----------------------------------------------------------------------------------------
     subroutine valid_report_add(sim, identifier, diag_command, report, ierr)
+        ! --------------------- !
+        ! NOT USED FOR NOW 
+        ! --------------------- !
         implicit none
 
         class(t_simulation), intent(inout) :: sim
@@ -1692,7 +1699,8 @@ contains
                 ! Identifier is complex → check if valid tags are included
 
                 if (index(identifier, 'tavg') > 0) then
-                    if (report%ndump(p_full) < 1 .or. report%n_tavg < 2) then
+                    print*, "Debug - n_tavg ", report%n_tavg
+                    if (report%n_tavg < 2) then
                         ierr = 3
                         if (root(sim%no_co)) then
                             print *, "DEBUG - Ignoring tavg. Ident: ", trim(identifier), "Cmd: ", trim(diag_command)
@@ -1702,36 +1710,27 @@ contains
                 end if
 
                 if (index(identifier, 'savg') > 0) then
-                    if (report%ndump(p_savg) < 1) then
+                    if ((any(report%n_ave(1:sim%g_space%x_dim) < 1))) then 
                         ierr = 3
                         if (root(sim%no_co)) then
-                            print *, "DEBUG - Ignoring savg. Ident: ", trim(identifier), "Cmd: ", trim(diag_command)
+                            print *, "DEBUG - Invalid n_ave for savg. Ident: ", trim(identifier), "Cmd: ", trim(diag_command)
                         end if
-                        return
-                    ! Should check this, but there is a syntax error in .not. condition -> FIX LATER
-
-                    !else if (.not. ((all(n_ave(1:sim%g_space%x_dim) >= 1)) .and. (any(n_ave(1:sim%g_space%x_dim) > 1)))) then 
-                    !    ierr = 3
-                    !    if (root(sim%no_co)) then
-                    !        print *, "DEBUG - Invalid n_ave for savg. Ident: ", trim(identifier), "Cmd: ", trim(diag_command)
-                    !    end if
-                    !   return
-
+                       return
                     end if
                 end if
 
                 if (index(identifier, 'senv') > 0) then
-                    if (report%ndump(p_senv) < 1) then
+                    if ((any(report%n_ave(1:sim%g_space%x_dim) < 1))) then 
                         ierr = 3
                         if (root(sim%no_co)) then
-                            print *, "DEBUG - Ignoring senv. Ident: ", trim(identifier), "Cmd: ", trim(diag_command)
+                            print *, "DEBUG - Invalid n_ave for savg. Ident: ", trim(identifier), "Cmd: ", trim(diag_command)
                         end if
-                        return
+                       return
                     end if
                 end if
 
                 if (index(identifier, 'line') > 0) then
-                    if (report%ndump(p_line) < 1 .or. sim%g_space%x_dim < 2) then
+                    if (sim%g_space%x_dim < 2) then
                         ierr = 3
                         if (root(sim%no_co)) then
                             print *, "DEBUG - Ignoring line. Ident: ", trim(identifier), "Cmd: ", trim(diag_command)
@@ -1741,7 +1740,7 @@ contains
                 end if
 
                 if (index(identifier, 'slice') > 0) then
-                    if (sim%g_space%x_dim < 3 .or. report%ndump(p_slice) < 1) then
+                    if (sim%g_space%x_dim < 3) then
                         ierr = 3
                         if (root(sim%no_co)) then
                             print *, "DEBUG - Ignoring slice. Ident: ", trim(identifier), "Cmd: ", trim(diag_command)
@@ -1751,15 +1750,11 @@ contains
                 end if
 
             else
-                ! Simple identifier, allow
                 return
             end if
         end if
 
     end subroutine valid_report_add
-
-
-
     
     !-----------------------------------------------------------------------------------------
     !       Orders a restart write -> Copied from main file
@@ -1852,6 +1847,44 @@ contains
         end if
 
     end subroutine set_max_time
+
+    subroutine set_omega_p0(sim, val, ierr)
+        implicit none
+
+        class(t_simulation), intent(inout) :: sim
+        character(len=*), intent(in) :: val
+        integer, intent(out) :: ierr
+
+        real(p_double) :: updated_tmax
+        integer :: conv_ierr
+
+        ierr = 0
+
+        ! Check if the value is empty or invalid
+        if (len_trim(val) == 0) then
+            ierr = 1
+            if (mpi_node() == 0) then
+                print *, "DEBUG - Omega_p0 setting skipped due to empty value"
+            end if
+            return
+        end if
+
+        ! Convert the value to a double precision real
+        updated_tmax = strtodouble(val, conv_ierr)
+        ! Change the parameter 
+        if (updated_tmax > 0) then
+            sim%options%omega_p0 = updated_tmax
+            if (mpi_node() == 0) then
+                print *, "DEBUG - Updated omega_p0 to ", sim%options%omega_p0
+            end if
+        else
+            ierr = 1
+            if (mpi_node() == 0) then
+                print *, "DEBUG - Omega_p0 not updated, new value ", updated_tmax, &
+                        " is not larger than zero"
+            end if
+        end if
+    end subroutine set_omega_p0
 
     !----------------------------------------------------------------------------------------
     !       Converts an array of strings to integers
