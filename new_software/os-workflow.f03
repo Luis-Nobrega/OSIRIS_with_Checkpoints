@@ -200,6 +200,7 @@ contains
         logical :: is_checkpoint_step
         logical, intent(out) :: steering_exit
         character(len=:), allocatable :: keys(:)
+        character(len=:), allocatable :: data_val_1
         integer :: ierr
 
         ! Diagnostic variables
@@ -243,6 +244,21 @@ contains
                 case ("omega_p0")
                     ! Change the plasma frequency
                     call set_omega_p0(sim, get_value(trim(keys(i))), ierr)
+
+                case ("math_func_expr")
+                    ! Receive data in format [ data1 ; data2 ]
+                    call parse_bracketed_pair(get_value(trim(keys(i))), name, data_val_1, ierr)
+                    if (ierr == 0) then
+                        ! Add the math function to the simulation
+                        call set_species_math_func(sim, trim(name), trim(data_val_1), ierr)
+                        if (ierr == 0) then
+                            if (mpi_node() == 0) print*, "DEBUG - Math function added: ", trim(name)
+                        else
+                            if (mpi_node() == 0) print*, "DEBUG - Error adding math function: ", trim(name)
+                        end if
+                    else
+                        if (mpi_node() == 0) print*, "DEBUG - Error parsing bracketed pair for math function: ", trim(keys(i))
+                    end if
 
                 case ("restart")
                     ! IN PROGRESS ????????????????????????????????????
@@ -376,6 +392,9 @@ contains
         if (allocated(identifier)) deallocate(identifier)
         if (allocated(diagnostic_name)) deallocate(diagnostic_name)
         if (allocated(diag_data_int)) deallocate(diag_data_int)
+        if (allocated(name)) deallocate(name)
+        if (allocated(data_val_1)) deallocate(data_val_1)
+
     end subroutine check_and_execute
 
 
@@ -1800,8 +1819,57 @@ contains
         call end_event(restart_write_ev)
 
     end subroutine write_restart
-        
-    
+
+    !----------------------------------------------------------------------------------------
+    !       Converts an array of strings to integers
+    !       WARNING: This funcion is temporary. The array will be substitured 
+    !       by a list in the near future to acommodate reals, bools and strings 
+    !----------------------------------------------------------------------------------------
+
+    subroutine str_array_to_int(str_array, int_array, ierr)
+        implicit none
+        ! Inputs
+        character(len=:), allocatable, intent(in)  :: str_array(:)
+        ! Outputs
+        integer, allocatable, intent(out)          :: int_array(:)
+        integer, intent(out)                       :: ierr
+
+        ! Locals
+        integer :: i, n, conv_ierr
+
+        n = size(str_array)
+        allocate(int_array(n))
+
+        do i = 1, n
+            ! Handle empty strings explicitly
+            if (len_trim(str_array(i)) == 0) then
+                ierr = 1
+                if (mpi_node() == 0) then
+                    print *, "STR_ARRAY_TO_INT ERROR: Empty string at position ", i
+                end if
+                return
+            end if
+            
+            int_array(i) = strtoint(trim(str_array(i)), conv_ierr)
+            if (conv_ierr /= 0) then
+                ierr = conv_ierr
+                if (mpi_node() == 0) then
+                    print *, "STR_ARRAY_TO_INT ERROR: Cannot convert '", trim(str_array(i)), "' to integer"
+                end if
+                return
+            end if
+        end do
+
+        ierr = 0
+    end subroutine str_array_to_int
+
+
+    !<------------------------------------------------------->! 
+    !                 Auxiliary Parameter Functions
+    !            To change simulation parameters and such
+    !<------------------------------------------------------->! 
+
+
     !----------------------------------------------------------------------------------------
     !       Changes the maximum time of the simulation
     !----------------------------------------------------------------------------------------
@@ -1848,6 +1916,10 @@ contains
 
     end subroutine set_max_time
 
+    !----------------------------------------------------------------------------------------
+    !       Sets the omega_p0 parameter of the simulation
+    !----------------------------------------------------------------------------------------
+
     subroutine set_omega_p0(sim, val, ierr)
         implicit none
 
@@ -1887,46 +1959,102 @@ contains
     end subroutine set_omega_p0
 
     !----------------------------------------------------------------------------------------
-    !       Converts an array of strings to integers
-    !       WARNING: This funcion is temporary. The array will be substitured 
-    !       by a list in the near future to acommodate reals, bools and strings 
+    !       Changes the math function of a species
     !----------------------------------------------------------------------------------------
 
-    subroutine str_array_to_int(str_array, int_array, ierr)
-        implicit none
-        ! Inputs
-        character(len=:), allocatable, intent(in)  :: str_array(:)
-        ! Outputs
-        integer, allocatable, intent(out)          :: int_array(:)
-        integer, intent(out)                       :: ierr
+    subroutine set_species_math_func(sim, name, math_function, ierr)
+        use m_fparser
+        use m_psource_std
 
-        ! Locals
-        integer :: i, n, conv_ierr
+        class(t_simulation), intent(inout) :: sim
+        character(len=*), intent(in) :: math_function
+        character(len=*), intent(in) :: name
+        integer, intent(out) :: ierr
 
-        n = size(str_array)
-        allocate(int_array(n))
-
-        do i = 1, n
-            ! Handle empty strings explicitly
-            if (len_trim(str_array(i)) == 0) then
-                ierr = 1
-                if (mpi_node() == 0) then
-                    print *, "STR_ARRAY_TO_INT ERROR: Empty string at position ", i
-                end if
-                return
-            end if
-            
-            int_array(i) = strtoint(trim(str_array(i)), conv_ierr)
-            if (conv_ierr /= 0) then
-                ierr = conv_ierr
-                if (mpi_node() == 0) then
-                    print *, "STR_ARRAY_TO_INT ERROR: Cannot convert '", trim(str_array(i)), "' to integer"
-                end if
-                return
-            end if
-        end do
+        ! Local variables
+        type(t_species), pointer :: species
+        class(t_psource), pointer :: src
+        logical :: found_name
+        integer :: n_x_dim
 
         ierr = 0
-    end subroutine str_array_to_int
+        found_name = .false.
+        
+        ! Start with first species in list
+        species => sim%part%species
+
+        ! Traverse species linked list
+        do while (associated(species))
+            if (trim(species%name) == trim(name)) then
+                found_name = .true.
+                exit
+            end if
+            species => species%next
+        end do
+
+        if (.not. found_name) then
+            ierr = 1
+            if (mpi_node() == 0) then
+                write(0,*) "Species not found: ", trim(name)
+            end if
+            return
+        end if
+
+        ! Access the source object
+        src => species%source
+        if (.not. associated(src)) then
+            ierr = 2
+            if (mpi_node() == 0) then
+                write(0,*) "No source defined for species: ", trim(name)
+            end if
+            return
+        end if
+
+        ! Check if source is math function type
+        select type (src)
+        type is (t_psource_std)
+            if (src%type(1) == 5) then
+                
+                ! Update expression
+                src%math_func_expr = trim(math_function)
+                
+                ! Determine spatial dimensions
+                 n_x_dim = species%get_n_x_dims()
+                
+                ! Recompile new math function
+                select case (n_x_dim)
+                case (1)
+                    call setup(src%math_func, trim(src%math_func_expr), &
+                            (/'x1'/), ierr)
+                case (2)
+                    call setup(src%math_func, trim(src%math_func_expr), &
+                            (/'x1','x2'/), ierr)
+                case (3)
+                    call setup(src%math_func, trim(src%math_func_expr), &
+                            (/'x1','x2','x3'/), ierr)
+                end select
+                
+                if (ierr /= 0) then
+                    if (mpi_node() == 0) then
+                        write(0,*) "Error compiling math function: ", &
+                                trim(src%math_func_expr)
+                    end if
+                    ierr = 3
+                end if
+
+            else
+                ierr = 4
+                if (mpi_node() == 0) then
+                    write(0,*) "Species source is not math function type"
+                end if
+            end if
+            
+        class default
+            ierr = 5
+            if (mpi_node() == 0) then
+                write(0,*) "Source type not supported for math function update"
+            end if
+        end select
+    end subroutine set_species_math_func
 
 end module m_workflow

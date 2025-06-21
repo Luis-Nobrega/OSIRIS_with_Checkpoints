@@ -8,7 +8,7 @@ module m_workflow_reader !*!
 
     ! Public interfaces
     public :: read_steering_file, get_value, get_size, steering_filename, get_keys
-    public :: parse_workflow_diagnostic, trim_diagnostic
+    public :: parse_workflow_diagnostic, trim_diagnostic, parse_bracketed_pair
 
     ! Internal storage type
     type :: term_value_pair
@@ -378,5 +378,57 @@ contains
 
         if (len_trim(trimmed_name) > 0) ierr = 0
     end subroutine trim_diagnostic
+
+    ! <-------------------------------->!
+    ! <--- Read other namelists --->!
+    ! <-------------------------------->!
+
+    subroutine parse_bracketed_pair(string, data1, data2, ierr)
+        character(len=*), intent(in) :: string
+        character(len=:), allocatable, intent(out) :: data1, data2
+        integer, intent(out) :: ierr
+        
+        character(len=len(string)) :: working_string
+        integer :: start_idx, end_idx, semicolon_pos
+        
+        ! Initialize
+        ierr = 1
+        if (allocated(data1)) deallocate(data1)
+        if (allocated(data2)) deallocate(data2)
+        
+        working_string = adjustl(string)
+        
+        ! Check for brackets
+        start_idx = index(working_string, '[')
+        end_idx = index(working_string, ']')
+        
+        if (start_idx == 0 .or. end_idx == 0 .or. start_idx >= end_idx) then
+            print*, "ERROR: Missing or malformed brackets"
+            return
+        endif
+        
+        ! Extract content between brackets
+        working_string = working_string(start_idx+1:end_idx-1)
+        working_string = adjustl(working_string)  ! Trim leading spaces
+        
+        ! Find semicolon separator
+        semicolon_pos = index(working_string, ';')
+        if (semicolon_pos == 0) then
+            print*, "ERROR: Missing semicolon separator"
+            return
+        endif
+        
+        ! Extract and trim both data items
+        data1 = trim(adjustl(working_string(1:semicolon_pos-1)))
+        data2 = trim(adjustl(working_string(semicolon_pos+1:)))
+        
+        ! Validate we got both items
+        if (len_trim(data1) == 0 .or. len_trim(data2) == 0) then
+            print*, "ERROR: Empty data item(s)"
+            return
+        endif
+        
+        ierr = 0  ! Success
+    end subroutine parse_bracketed_pair
 
 end module m_workflow_reader
