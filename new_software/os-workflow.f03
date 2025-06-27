@@ -29,6 +29,10 @@ module m_workflow !*!
     use m_species_define
     use m_restart, only: t_restart_handle
 
+    ! For profile editing 
+    use m_fparser
+    use m_psource_std
+
     #include "os-config.h"
     #include "os-preprocess.fpp"
 
@@ -1963,8 +1967,6 @@ contains
     !----------------------------------------------------------------------------------------
 
     subroutine set_species_math_func(sim, name, math_function, ierr)
-        use m_fparser
-        use m_psource_std
 
         class(t_simulation), intent(inout) :: sim
         character(len=*), intent(in) :: math_function
@@ -2056,5 +2058,184 @@ contains
             end if
         end select
     end subroutine set_species_math_func
+
+    !----------------------------------------------------------------------------------------
+    !       Changes value parameters of profile type 
+    !----------------------------------------------------------------------------------------
+
+    subroutine modify_profile_params (sim, name, command, value, ierr)   
+        class(t_simulation), intent(inout) :: sim
+        character(len=*), intent(in) :: name
+        character(len=*), intent(in) :: command
+        character(len=*), intent(in) :: value
+        integer, intent(out) :: ierr
+
+        ! Local variables
+        type(t_species), pointer :: species
+        class(t_psource), pointer :: src
+        real(p_double) :: numeric_double
+        integer :: numeric_int
+        logical :: found_name
+
+        ierr = 0
+        found_name = .false.
+        
+        ! Start with first species in list
+        species => sim%part%species
+
+        ! Traverse species linked list
+        do while (associated(species))
+            if (trim(species%name) == trim(name)) then
+                found_name = .true.
+                exit
+            end if
+            species => species%next
+        end do
+
+        if (.not. found_name) then
+            ierr = 1
+            if (mpi_node() == 0) then
+                write(0,*) "Species not found: ", trim(name)
+            end if
+            return
+        end if
+
+        ! Access the source object
+        src => species%source
+        if (.not. associated(src)) then
+            ierr = 2
+            if (mpi_node() == 0) then
+                write(0,*) "No source defined for species: ", trim(name)
+            end if
+            return
+        end if
+
+        select case (trim(command))
+            case ("density")
+                numeric_double = strtodouble(value, ierr)
+                if (ierr /= 0 .and. mpi_node == 0) then
+                    print *, "DEBUG : Invalid value for setting density"
+                else if (ierr == 0 .and. numeric_double >= 0 ) then 
+                    src%density = numeric_double
+                endif 
+
+            case ("den_min")
+                numeric_double = strtodouble(value, ierr)
+                if (ierr /= 0 .and. mpi_node == 0) then
+                    print *, "DEBUG : Invalid value for setting density"
+                else if (ierr == 0 .and. numeric_double >= 0 ) then
+                    src%den_min = numeric_double
+                endif 
+
+            case ("num_x")
+                numeric_double = strtodouble(value, ierr)
+                if (ierr /= 0 .and. mpi_node == 0) then
+                    print *, "DEBUG : Invalid value for setting density"
+                else if (ierr == 0 .and. numeric_double >= 0 ) then
+                    src%num_x = numeric_double
+                endif 
+
+            case ("gauss_center")
+
+            case ("gauss_n_sigma")
+                
+            case ("channel_dir") !???????????????????????????''
+                numeric_int = strtoint(value, ierr)
+                if (ierr /= 0 .and. mpi_node == 0) then
+                    print *, "DEBUG : Invalid value for setting density"
+                else if ((numeric_int < 1 .or. numeric_int > 3) .and. mpi_node == 0) then 
+                    print *, "DEBUG : Invalid value for setting density"
+                else if (ierr == 0 ) then
+                    src%channel_dir = numeric_int
+                endif 
+
+            case ("channel_r0")
+                numeric_double = strtodouble(value, ierr)
+                if (ierr /= 0 .and. mpi_node == 0) then
+                    print *, "DEBUG : Invalid value for setting density"
+                else if (ierr == 0 .and. numeric_double >= 0) then
+                    src%channel_r0 = numeric_double
+                endif 
+
+            case ("channel_depth")
+                numeric_double = strtodouble(value, ierr)
+                if (ierr /= 0 .and. mpi_node == 0) then
+                    print *, "DEBUG : Invalid value for setting density"
+                else if (ierr == 0 .and. numeric_double >= 0) then
+                    src%channel_depth = numeric_double
+                endif 
+
+            case ("channel_size")
+                numeric_double = strtodouble(value, ierr)
+                if (ierr /= 0 .and. mpi_node == 0) then
+                    print *, "DEBUG : Invalid value for setting density"
+                else if (ierr == 0 .and. numeric_double >= 0) then
+                    src%channel_size = numeric_double
+                endif 
+            
+            case ("channel_center")
+
+            case ("channel_wall")
+                numeric_double = strtodouble(value, ierr)
+                if (ierr /= 0 .and. mpi_node == 0) then
+                    print *, "DEBUG : Invalid value for setting density"
+                else if (ierr == 0 .and. numeric_double >= 0) then
+                    src%channel_wall = numeric_double
+                endif 
+
+            case ("channel_pos")
+
+            case ("channel_bottom")
+                numeric_double = strtodouble(value, ierr)
+                if (ierr /= 0 .and. mpi_node == 0) then
+                    print *, "DEBUG : Invalid value for setting density"
+                else if (ierr == 0 .and. numeric_double >= 0) then
+                    src%channel_bottom = numeric_double
+                endif 
+
+            case ("sphere_center")
+
+            case ("sphere_radius")
+                numeric_double = strtodouble(value, ierr)
+                if (ierr /= 0 .and. mpi_node == 0) then
+                    print *, "DEBUG : Invalid value for sphere_radius"
+                else if (ierr == 0 .and. numeric_double >= 0) then
+                    src%sphere_radius = numeric_double
+                endif 
+            
+            ! Constant charge add check to see if t_psource_constq
+            case ("sample_rate")
+                numeric_int = strtoint(value, ierr)
+                if (ierr /= 0 .and. mpi_node == 0) then
+                    print *, "DEBUG : Invalid value for sample_rate"
+                else if (ierr == 0 .and. numeric_int > 0) then
+                    src%channel_dir = numeric_int
+                endif 
+
+            ! Beam specific quantities Add check to see if type t_psource_beam
+            case ("focal_dist")
+
+            case ("alpha")
+
+            case ("uth")
+
+            case ("gamma")
+                numeric_double = strtodouble(value, ierr)
+                if (ierr /= 0 .and. mpi_node == 0) then
+                    print *, "DEBUG : Invalid value for gamma"
+                else if (ierr == 0 .and. numeric_double >= 1) then
+                    src% = numeric_double
+                endif 
+
+            ! Raw specific quantities Add check to see if  t_psource_file
+            case("file_name")
+                
+
+            case("x1_offset")
+
+            case ("q_mult")
+
+
+    end subroutine modify_profile_params
 
 end module m_workflow
