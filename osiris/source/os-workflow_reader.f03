@@ -3,12 +3,16 @@ module m_workflow_reader !*!
     use, intrinsic :: iso_fortran_env, only: iostat_end
     use mpi, only: MPI_COMM_WORLD, MPI_INTEGER, MPI_CHARACTER, MPI_BCAST, MPI_BARRIER
     use m_node_conf, only: t_node_conf, root
+    use stringutil
     implicit none
     private
+
+    integer, parameter :: p_double = kind(1.0d0)  ! Standard double precision
 
     ! Public interfaces
     public :: read_steering_file, get_value, get_size, steering_filename, get_keys
     public :: parse_workflow_diagnostic, trim_diagnostic, parse_bracketed_pair
+    public :: str_array_to_int,str_array_to_real, str_array_to_logical, determine_array_type
 
     ! Internal storage type
     type :: term_value_pair
@@ -430,5 +434,170 @@ contains
         
         ierr = 0  ! Success
     end subroutine parse_bracketed_pair
+
+    ! <-------------------------------->!
+    ! <--- Parse arrays of strings  --->!
+    ! <-------------------------------->!
+
+    subroutine str_array_to_int(str_array, int_array, ierr)
+        implicit none
+        ! Inputs
+        character(len=:), allocatable, intent(in)  :: str_array(:)
+        ! Outputs
+        integer, allocatable, intent(out)          :: int_array(:)
+        integer, intent(out)                       :: ierr
+
+        ! Locals
+        integer :: i, n, conv_ierr
+
+        n = size(str_array)
+        allocate(int_array(n))
+
+        do i = 1, n
+            ! Handle empty strings explicitly
+            if (len_trim(str_array(i)) == 0) then
+                ierr = 1
+                !print *, "STR_ARRAY_TO_INT ERROR: Empty string at position ", i
+                return
+            end if
+            
+            int_array(i) = strtoint(trim(str_array(i)), conv_ierr)
+            if (conv_ierr /= 0) then
+                ierr = conv_ierr
+                !print *, "STR_ARRAY_TO_INT ERROR: Cannot convert '", trim(str_array(i)), "' to integer"
+                return
+            end if
+        end do
+
+        ierr = 0
+    end subroutine str_array_to_int
+
+    subroutine str_array_to_real(str_array, real_array, ierr)
+        implicit none
+        ! Inputs
+        character(len=:), allocatable, intent(in)  :: str_array(:)
+        ! Outputs
+        real(p_double), allocatable, intent(out)   :: real_array(:)
+        integer, intent(out)                       :: ierr
+
+        ! Locals
+        integer :: i, n, conv_ierr
+
+        n = size(str_array)
+        allocate(real_array(n))
+
+        do i = 1, n
+            ! Handle empty strings explicitly
+            if (len_trim(str_array(i)) == 0) then
+                ierr = 1
+                !print *, "STR_ARRAY_TO_REAL ERROR: Empty string at position ", i
+                return
+            end if
+            
+            real_array(i) = strtodouble(trim(str_array(i)), conv_ierr)
+            if (conv_ierr /= 0) then
+                ierr = conv_ierr
+                !print *, "STR_ARRAY_TO_REAL ERROR: Cannot convert '", trim(str_array(i)), "' to double"
+                return
+            end if
+        end do
+
+        ierr = 0
+    end subroutine str_array_to_real
+
+    subroutine str_array_to_logical(str_array, logical_array, ierr)
+        implicit none
+        ! Inputs
+        character(len=:), allocatable, intent(in)  :: str_array(:)
+        ! Outputs
+        logical, allocatable, intent(out)          :: logical_array(:)
+        integer, intent(out)                       :: ierr
+
+        ! Locals
+        integer :: i, n
+
+        n = size(str_array)
+        allocate(logical_array(n))
+
+        do i = 1, n
+            ! Handle empty strings explicitly
+            if (len_trim(str_array(i)) == 0) then
+                ierr = 1
+                !print *, "STR_ARRAY_TO_LOGICAL ERROR: Empty string at position ", i
+                return
+            end if
+            
+            if (trim(str_array(i)) == ".true.") then
+                logical_array(i) = .true.
+            else if (trim(str_array(i)) == ".false.") then 
+                logical_array(i) = .false.
+            else 
+                ierr = 1
+                !print *, "STR_ARRAY_TO_LOGICAL ERROR: Cannot convert '", trim(str_array(i)), "' to logical"
+                return
+            end if
+        end do
+
+        ierr = 0
+    end subroutine str_array_to_logical
+
+    subroutine determine_array_type(str_array, int_array, real_array, logical_array, ierr)
+        implicit none
+        ! Inputs
+        character(len=:), allocatable, intent(in)  :: str_array(:)
+        ! Outputs
+        integer, allocatable, intent(out)          :: int_array(:)
+        real(p_double), allocatable, intent(out)   :: real_array(:)
+        logical, allocatable, intent(out)          :: logical_array(:)
+        integer, intent(out)                       :: ierr
+
+        ! Locals
+        character(len=:), allocatable :: first_str
+        integer :: conv_ierr
+        integer :: dummy_int  ! To capture integer function result
+        real(p_double) :: dummy_real  ! To capture real function result
+
+        ! Initialize all output arrays as unallocated
+        if (allocated(int_array)) deallocate(int_array)
+        if (allocated(real_array)) deallocate(real_array)
+        if (allocated(logical_array)) deallocate(logical_array)
+
+        ! Check for empty input array
+        if (size(str_array) == 0) then
+            ierr = 1
+            return
+        end if
+
+        ! Get first non-empty string if available
+        first_str = trim(str_array(1))
+
+        ! Check if first string is empty
+        if (len_trim(first_str) == 0) then
+            ierr = 1
+            return
+        end if
+
+        ! Determine type based on first element
+        if (first_str == ".true." .or. first_str == ".false.") then
+            ! Convert to logical
+            call str_array_to_logical(str_array, logical_array, ierr)
+        else
+            ! Try integer conversion - assign to dummy variable
+            dummy_int = strtoint(first_str, conv_ierr)
+            if (conv_ierr == 0) then
+                call str_array_to_int(str_array, int_array, ierr)
+            else
+                ! Try real conversion - assign to dummy variable
+                dummy_real = strtodouble(first_str, conv_ierr)
+                if (conv_ierr == 0) then
+                    call str_array_to_real(str_array, real_array, ierr)
+                else
+                    ! None of the types matched
+                    ierr = 1
+                end if
+            end if
+        end if
+    end subroutine determine_array_type
+   
 
 end module m_workflow_reader

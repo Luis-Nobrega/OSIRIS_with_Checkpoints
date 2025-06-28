@@ -29,6 +29,10 @@ module m_workflow !*!
     use m_species_define
     use m_restart, only: t_restart_handle
 
+    ! For profile editing 
+    use m_fparser
+    use m_psource_std
+
     #include "os-config.h"
     #include "os-preprocess.fpp"
 
@@ -1820,50 +1824,6 @@ contains
 
     end subroutine write_restart
 
-    !----------------------------------------------------------------------------------------
-    !       Converts an array of strings to integers
-    !       WARNING: This funcion is temporary. The array will be substitured 
-    !       by a list in the near future to acommodate reals, bools and strings 
-    !----------------------------------------------------------------------------------------
-
-    subroutine str_array_to_int(str_array, int_array, ierr)
-        implicit none
-        ! Inputs
-        character(len=:), allocatable, intent(in)  :: str_array(:)
-        ! Outputs
-        integer, allocatable, intent(out)          :: int_array(:)
-        integer, intent(out)                       :: ierr
-
-        ! Locals
-        integer :: i, n, conv_ierr
-
-        n = size(str_array)
-        allocate(int_array(n))
-
-        do i = 1, n
-            ! Handle empty strings explicitly
-            if (len_trim(str_array(i)) == 0) then
-                ierr = 1
-                if (mpi_node() == 0) then
-                    print *, "STR_ARRAY_TO_INT ERROR: Empty string at position ", i
-                end if
-                return
-            end if
-            
-            int_array(i) = strtoint(trim(str_array(i)), conv_ierr)
-            if (conv_ierr /= 0) then
-                ierr = conv_ierr
-                if (mpi_node() == 0) then
-                    print *, "STR_ARRAY_TO_INT ERROR: Cannot convert '", trim(str_array(i)), "' to integer"
-                end if
-                return
-            end if
-        end do
-
-        ierr = 0
-    end subroutine str_array_to_int
-
-
     !<------------------------------------------------------->! 
     !                 Auxiliary Parameter Functions
     !            To change simulation parameters and such
@@ -1963,8 +1923,6 @@ contains
     !----------------------------------------------------------------------------------------
 
     subroutine set_species_math_func(sim, name, math_function, ierr)
-        use m_fparser
-        use m_psource_std
 
         class(t_simulation), intent(inout) :: sim
         character(len=*), intent(in) :: math_function
@@ -2014,8 +1972,6 @@ contains
         select type (src)
         type is (t_psource_std)
             if (src%type(1) == 5) then
-                ! Clean up old parser
-                !call src%cleanup()
                 
                 ! Update expression
                 src%math_func_expr = trim(math_function)
@@ -2058,5 +2014,10 @@ contains
             end if
         end select
     end subroutine set_species_math_func
+
+    !----------------------------------------------------------------------------------------
+    !       Changes value parameters of profile type  
+    !----------------------------------------------------------------------------------------
+
 
 end module m_workflow
