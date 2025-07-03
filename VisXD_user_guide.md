@@ -24,7 +24,7 @@
 
 ## Introduction
 
-Welcome to the VisXD Visualization User Guide. This document walks you through everything you need to get started with VisXD inside a Singularity (Apptainer) container on an HPC cluster. By the end of this guide, you’ll know how to request and transfer the container, configure your environment, and launch VisXD to generate interactive graphics.
+Welcome to the VisXD Visualization User Guide. This document walks you through everything you need to get started with VisXD inside a Singularity (Apptainer) container on an HPC cluster. By the end of this guide, you’ll know how to request and transfer the container, configure your environment, and launch VisXD to generate interactive graphics. The point of this software is to end the need of downloading files from HPC clusters to local machines and instead use the HPC resources and the local GUI to treat data, as simulations are running.
 
 ---
 
@@ -33,19 +33,20 @@ Welcome to the VisXD Visualization User Guide. This document walks you through e
 Before you begin, ensure the following:
 
 1. **Graphical Interface on Local Machine**  
-   - Run `xeyes` or check with `echo $DISPLAY`.  
+   - Run `xeyes` or check with `echo $DISPLAY` to verify if a GUI is avaliable.
    - Make sure you have an X11 server or equivalent GUI support installed.
 
 2. **Singularity (or Apptainer) on HPC**  
    ```bash
    which singularity
+   ```
 
 - If only Docker is available, contact the author for a compatible container!
 
 
 # 2. Requesting and Transferring the Container
 
-1. Request the Singularity image (~1 GB) and helper script graphics.sh by emailing luis.nobrega@tecnico.ulisboa.pt.
+1. Request the `Singularity image` (~1 GB) and helper script `graphics.sh` by emailing luis.nobrega@tecnico.ulisboa.pt.
 
 2. Transfer both files to your working directory on the cluster (e.g., with scp or rsync).
 
@@ -53,9 +54,11 @@ Before you begin, ensure the following:
 
 ## 3.1 Configuring Your Shell
 
-Edit your `~/.bashrc` file:
+After transfering the singularity container to the HPC environment, enter it using `./graphics.sh minha_imagem` and then edit your `~/.bashrc` file:
 
 # ~/.bashrc
+
+You should add/see something like this:
 
 ```shell
 if [ -f /etc/bashrc ]; then
@@ -69,14 +72,16 @@ fi
 export IDL_PATH="<IDL_DEFAULT>:+/home/swe/visxd"
 ```
 
-Apply changes:
+After exiting and saving `~/.bashrc`, apply changes:
 
 ```shell
 source ~/.bashrc
 ```
-Replace `<IDL_DEFAULT>` with your actual IDL path, if needed.
+Replace `<IDL_DEFAULT>` with your actual IDL path, if needed. 
 
 # 4. Quick Start Guide
+
+Start by opening a code editor or a terminal in your local machine.
 
 1. SSH with X11 forwarding:
 
@@ -103,6 +108,10 @@ The script is name `minha_imagem.sif`
 ```shell
 idl vis2d
 ```
+
+The process inside the cluster should look like this:
+
+![Quick use](p1_3.png)
 
 ⚠️ Running long jobs on login nodes is discouraged. Use salloc or srun --pty for interactive compute sessions. For more information on how to forward the GUI to the allocated node, send an email or ask AI.
 
@@ -220,3 +229,10 @@ For questions, issues, or requests:
 
 📧 Luís Nóbrega
 luis.nobrega@tecnico.ulisboa.pt
+
+or 
+
+
+📧 Thales Silva
+
+ thales.silva@tecnico.ulisboa.pt
