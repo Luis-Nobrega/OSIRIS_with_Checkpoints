@@ -37,11 +37,19 @@ Before you begin, ensure the following:
    - Make sure you have an X11 server or equivalent GUI support installed.
 
 2. **Singularity (or Apptainer) on HPC**  
+- Singularity needs to be present on the HPC environment. To check use:
    ```bash
    which singularity
    ```
-
-- If only Docker is available, contact the author for a compatible container!
+- If your HPC uses modules, try using:
+  ```bash
+    module load singularity
+    ```
+   or check which modules are available with:
+  ```bash
+   module avail
+   ```
+- If only Docker is available, contact support for a compatible container!
 
 
 # 2. Requesting and Transferring the Container
@@ -111,7 +119,7 @@ idl vis2d
 
 The process inside the cluster should look like this:
 
-![Quick use](p1_3.png)
+![Quick use](images/p1_3.png)
 
 ⚠️ Running long jobs on login nodes is discouraged. Use salloc or srun --pty for interactive compute sessions. For more information on how to forward the GUI to the allocated node, send an email or ask AI.
 

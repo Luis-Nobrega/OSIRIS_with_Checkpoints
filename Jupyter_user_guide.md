@@ -33,6 +33,7 @@ Before you begin, ensure the following:
 
 2. **Transfer the needed files**  
    - You need two files: `Run_venv.sh` (on HPC cluster) and `Tunnel_venv.sh` (on local machine)
+   - Make them executable with `chmod +x file_name`
 
 ---
 
@@ -66,8 +67,8 @@ source Run_venv.sh [PROJECT] [ACCOUNT] [PARTITION] [TIME] [INSTALL] [NODE_ID] [N
 
 Example execution:
 
-![Quick use](p1_1.png)
-![Quick use](p1_2.png)
+![Quick use](images/p1_1.png)
+![Quick use](images/p1_2.png)
 
 ## 3. Setting up Tunnel_venv.sh
 
@@ -96,7 +97,7 @@ source Tunnel_venv.sh [USER] [LOGIN] [NODE] [PORT]
 ```
 
 After execution, access Jupyter at `http://localhost:8888/`(paste the link in a local browser):
-![Quick use](p1_4.png)
+![Quick use](images/p1_4.png)
 
 ## 4. Quick Start Guide
 

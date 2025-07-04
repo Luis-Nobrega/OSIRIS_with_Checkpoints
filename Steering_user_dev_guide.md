@@ -154,19 +154,39 @@ diag_species_2 = [electrons+; q1;  ndump_fac; 2]
 
 ## 3. Moving window
 
-~~Under development~~
+A moving window is a simulation technique commonly used in plasma physics and particle-in-cell (PIC) codes where the computational domain moves along with a group of particles or a wave (typically at the speed of light or the group velocity of the laser/plasma structure). This allows for longer effective simulation times with reduced computational cost, as only the relevant region of space is simulated.
+
+There is a feature that allows for changing the background distribution of any species—including those associated with neutrals—on-the-fly during a simulation. This can be useful, for example, to model spatial or temporal variation in plasma profiles.
+
+To use this command, set:
+
+```shell
+math_func_expr = [NAME; CMD]
+```
+
+Where:
+
+- NAME is the name of the species, such as electrons or positrons2.
+
+- CMD is the custom math function (as a string) that defines the new distribution.
+
+⚠️ Important: This feature only works if your initial distribution was set using a custom math function. Support for switching from predefined profiles (like piecewise) to a custom function dynamically is planned for future versions.
+
+An example that changes a cosine to a flattop distribution is shown bellow:
+
+![Quick use](images/Moving_window_PIC_letters.png)
 
 ## 4. Automatic restart
 
-~~Under development~~
+❌ **Failure**: This feature isn't working as of now. Contact support for more info
 
 Preemptible HPC cluster with QoS-based priority scheduling are High performance computing environments where priority queues dictate who gets to allocate resources and who has to abdicate of theirs in case of reaching operational capacity. 
 
-A **highly experimental** method was developed to cope with the possibility of running orisis in these servers. It consists of running a shell script in the login nodes that will checkk wether the simulation finished or not and will restart it with the latest checkpoint.
+A **highly experimental** method was developed to cope with the possibility of running orisis in these servers. It consists of running a shell script (preferably in an allocated node)  that will check wether the simulation finished or not and will restart it with the latest checkpoint if canellation was detected.
 
-This doesn’t account for recurringly crashing simulations (YET) and will keep trying to run it. 
+This script doesn’t account for recurringly crashing simulations (YET) and will keep trying to run it. 
 
-See `Preemptible_HPC_OSIRIS.sh` for more info
+See `Preemptible_HPC_OSIRIS.sh` for more info.
 
 ---
 
