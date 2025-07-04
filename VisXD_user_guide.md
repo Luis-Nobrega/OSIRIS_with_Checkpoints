@@ -62,6 +62,10 @@ Before you begin, ensure the following:
 
 ## 3.1 Configuring Your Shell
 
+Transfer the container into the HPC env using (for deucalion): 
+ ```bash
+scp local/path/to/file login.deucalion.macc.fccn.pt:/HPC/folder/path
+ ```
 After transfering the singularity container to the HPC environment, enter it using `./graphics.sh minha_imagem` and then edit your `~/.bashrc` file:
 
 # ~/.bashrc
