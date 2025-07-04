@@ -8,7 +8,7 @@ Given the request of some researchers to be able to modify simulation paramether
 
 The main version of this code (June 2025) is provided publicly here: https://github.com/Luis-Nobrega/OSIRIS_with_Checkpoints and is based on the open source version from 2023.
 
-**WARNING:** This project is still experimental and is not yet fitted to deal with every exception. Please try to follow the provided instructions before submitting a file. Bugs (or suggestions) should be reported to [luis.nobrega@tecnico.ulisboa.pt](mailto:luis.nobrega@tecnico.ulisboa.pt). 
+⚠️ **WARNING:** This project is still experimental and is not yet fitted to deal with every exception. Please try to follow the provided instructions before submitting a file. Bugs, unexpected crashes (or suggestions) should be reported to [luis.nobrega@tecnico.ulisboa.pt](mailto:luis.nobrega@tecnico.ulisboa.pt) and [thales.silva@tecnico.ulisboa.pt](mailto:thales.silva@tecnico.ulisboa.pt).
 
 ---
 
@@ -34,9 +34,11 @@ This frequency is absolute, therefore, in this case, each 50 steps, OSIRIS will 
 
 For example, while restart checkpoints could happen at each 1 million steps, this verification could happen at each thousand.
 
+⚠️ **WARNING:** This feature is being fixed so as setting this value is not mandatory and defaulted to 0 -> (04/07/25)
+
 ### Steering file
 
-The module will always look for a file named `steering_input_deck` . If successful, this file will be renamed to `steering_input_deck.used` and will no longer be read. The user must then create a new `steering_input_deck` , or modify and rename `steering_input_deck.used` for it to be read again.
+The module will always look for a file named `steering_input_deck` . If successful, this file will be renamed to `steering_input_deck.used` and will no longer be read. The user must then create a new `steering_input_deck` , or modify/rename `steering_input_deck.used` for it to be read again.
 
 The file accepts data in the format: `key = value` . A valid example is as follows:
 
@@ -55,7 +57,7 @@ diag_current_2 = [j2; ndump_fac; 3]
 
 ```
 
-Blank lines or everything after ! will be ignored. For good practise, if you need to comment something, do it in the line above the command, and **not on the same line**, as that has been reported to ocasionally lead to unexpected behaviour.
+Blank lines or everything after `!` will be ignored. For good practise, if you need to comment something, do it in the line **above the command**, and **not on the same line**, as that has been reported to ocasionally lead to unexpected behaviour.
 
 ---
 
@@ -73,6 +75,8 @@ Basic commands follow the structure `key = value`, where value can be an integer
 | **abort** | Stops the simulation WITHOUT outputing restart files | Int → default = 0 ; 1 to activate |
 | **tmax** | Changes the maximum simulation time of the simulation. | Real → Must be bigger than current time value or will be ignored |
 | **omega_p0** | Changes omega_p0 quantity (not fully tested) | Real → Bigger than 0 |
+
+⚠️ **WARNING:** This feature is being fixed so as values other than `integer` type are accepted. The scripts to process `logical`, `string` and and `double` values are already in place but not implemented yet (04/07/25)
 
 ### Diagnostic commands
 
@@ -178,7 +182,7 @@ An example that changes a cosine to a flattop distribution is shown bellow:
 
 ## 4. Automatic restart
 
-❌ **Failure**: This feature isn't working as of now. Contact support for more info
+❌ **Failure**: This feature isn't working as of now. Contact support for more info.
 
 Preemptible HPC cluster with QoS-based priority scheduling are High performance computing environments where priority queues dictate who gets to allocate resources and who has to abdicate of theirs in case of reaching operational capacity. 
 
