@@ -20,7 +20,9 @@ By default, the module is activated. To deactivate it, place `DISABLE_STEERING=1
 
 ### Setting the steering frequency
 
-A new variable `steering_step` was defined so as to definethe frequency to which OSIRIS. Setting this variable is MANDATORY, and must be an integer > 0. It has to be manually defined inside the `time_step` block of the `input namelist`.
+A new variable `steering_step` was defined so as to definethe frequency to which OSIRIS. Setting this variable is MANDATORY to use the module, and must be an integer > 0. It has to be manually defined inside the `time_step` block of the `input namelist`.
+
+If you desire to proceed 
 
 ```fortran
 time_step {

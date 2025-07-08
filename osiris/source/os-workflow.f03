@@ -67,10 +67,18 @@ contains
                 print*, "Workflow step set to: ", workflow_step
             end if
         else
+            if (step == 0) then 
+                workflow_step = step ! Deactivate steering if requested 
+            endif
+
             if (root(sim%no_co)) then
-                print*, "Steering step not defined or invalid: ", step
-                print*, "Use 'steering_step = value' Must be greater than 0."
-                print*, "Won't be checking steering checkpoints."
+                if (step == 0) then 
+                    print*, "Steering step set to 0. Deactivating sgteering module!"
+                    print*, "Won't be checking steering checkpoints."
+                else 
+                    print*, "Steering step not defined or invalid: ", step
+                    print*, "Use 'steering_step = value' Must be greater than 0."
+                endif
             end if
         end if
     end subroutine set_workflow_step
