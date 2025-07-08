@@ -224,8 +224,13 @@ contains
         character(len=:), allocatable :: name
         character(len=:), allocatable :: diag_command
         character(len=:), allocatable :: diag_data(:)
+        
+        ! Allocatable variables to store data in different formats 
         integer, allocatable :: diag_data_int(:)
-        logical :: add_rep
+        ! real(p_double), allocatable :: diag_data_real(:) ! 
+        ! logical, allocatable :: diag_data_logical(:) ! 
+
+        logical :: add_rep ! Variable that allows for adding a specific report with a + sign
 
         ! Check checkpoint status
         is_checkpoint_step = if_restart_write(sim%restart, n(sim%tstep), ndump(sim%tstep), &
@@ -406,6 +411,8 @@ contains
         if (allocated(identifier)) deallocate(identifier)
         if (allocated(diagnostic_name)) deallocate(diagnostic_name)
         if (allocated(diag_data_int)) deallocate(diag_data_int)
+        ! if (allocated(diag_data_real)) deallocate(diag_data_real)
+        ! if (allocated(diag_data_logical)) deallocate(diag_data_logical)
         if (allocated(name)) deallocate(name)
         if (allocated(data_val_1)) deallocate(data_val_1)
 
