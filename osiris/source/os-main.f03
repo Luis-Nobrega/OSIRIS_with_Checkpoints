@@ -283,7 +283,9 @@ subroutine run_sim( sim )
 
      !*! check if a file should be read by the root node 
     #ifdef __STEERING__
-      call check_workflow_step(file_ok, sim, sim%no_co, steering_exit) !*!
+      if (workflow_step > 0) then ! ignored if steering freq deactivated or not set 
+        call check_workflow_step(file_ok, sim, sim%no_co, steering_exit) !*!
+      endif 
     #endif
 
      if (steering_exit) then

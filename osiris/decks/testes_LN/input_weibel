@@ -15,7 +15,7 @@ grid {
 time_step {
   dt     =   0.07,                    ! \Delta t = 0.07
   ndump  =  5,
-  steering_step = 50,                        ! Global diagnostic frequency set to 5	
+  steering_step = 50,                 ! Global diagnostic frequency set to 5	
 }
 
 restart

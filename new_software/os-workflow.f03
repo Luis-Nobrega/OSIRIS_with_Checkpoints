@@ -46,11 +46,13 @@ module m_workflow !*!
     public :: check_workflow_step, set_workflow_step
 
     integer :: iteration_counter = 0
-    integer :: workflow_step
+    integer :: workflow_step = 0 ! By default it is turned off !*!
     integer :: ierr, n_entries
 
     character(len=*), parameter :: filename = steering_filename
     character(len=256) :: used_filename = "steering_input_deck.used" ! Novo nome para o ficheiro renomeado
+
+    public :: workflow_step !*!
 
 contains
 
