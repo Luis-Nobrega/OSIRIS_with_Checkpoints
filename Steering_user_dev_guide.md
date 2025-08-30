@@ -29,16 +29,21 @@
 ---
 
 ## Introduction
-The steering module enables runtime modification of OSIRIS simulation parameters without restarting. Key features include:
+The [OSIRIS](https://osiris-code.github.io/) open-source project aims to provide a Particle-in-cell (PIC) code for laser-plasma physics. Given the rigidity of the code, a first attempt at allowing steering during simulations was made.
+
+The newly developed steering module enables runtime modification of OSIRIS simulation parameters without restarting. 
+
+Key features include:
 - Dynamic parameter adjustments
 - On-demand checkpoint creation  
 - Diagnostic frequency control  
 
-⚠️ **Experimental Status**: Not all exceptions are handled. Report issues to the authors.
+⚠️ **Experimental Status**: This code was developed in a short period by an undergrad student. It mainly serves as a proof of concept for a definitive future expansion of OSIRIS. Not all exceptions are handled. Please report issues to the authors.
 
 ---
 
 ## 1. Usage
+This module was built on top of the opersource version of OSIRIS and can be downloaded [here](https://github.com/Luis-Nobrega/OSIRIS_with_Checkpoints). 
 ### 1.1 Disabling the Module
 Add to config file:  
 ```fortran
