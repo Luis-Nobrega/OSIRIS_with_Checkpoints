@@ -5,7 +5,7 @@
 [![Experimental](https://img.shields.io/badge/Under_development-yellow)](https://opensource.org/licenses/MIT)
 
 
-Enhanced version of the OSIRIS particle-in-cell (PIC) code framework with checkpoint/restart capabilities for HPC environments. 
+>Enhanced version of the OSIRIS particle-in-cell (PIC) code framework with checkpoint/restart capabilities for HPC environments. 
 
 For detailed information on usage and features, consult the **[user/dev guide](https://github.com/Luis-Nobrega/OSIRIS_with_Checkpoints/blob/main/Steering_user_dev_guide.md)**. If you're interested in the project methodology, consider reading the **[academic report](https://github.com/Luis-Nobrega/OSIRIS_with_Checkpoints/blob/main/ReportPIC-1106716.pdf)**.
 
@@ -22,9 +22,9 @@ For detailed information on usage and features, consult the **[user/dev guide](h
 This version uses the same prerequisites as the opoen source version. For detailed info, consult [OSIRIS QUICKSTART](https://osiris-code.github.io/quickstart/#0-prerequisites).
 
 An overview is as follows:
-- Suitable Compilers: gfortran ; gcc ; make 
-- Valid MPI library: OpenMPI 
-- External dependencies such as HDF5 
+- Suitable Compilers: `gfortran` ; `gcc` ; `make` 
+- Valid MPI library: `OpenMPI`
+- External dependencies such as `HDF5`
 
 ### Installation Steps
 ```bash
@@ -72,6 +72,7 @@ Distributed under the MIT License. See LICENSE for more information.
 
 📧 Thales Silva (PhD) - thales.silva@tecnico.ulisboa.pt
 
+Group of Lasers and Plasmas - https://golp.tecnico.ulisboa.pt/
+
 Project Link: https://github.com/Luis-Nobrega/OSIRIS_with_Checkpoints
 
-Group Of Lasers and Plasmas - https://golp.tecnico.ulisboa.pt/
