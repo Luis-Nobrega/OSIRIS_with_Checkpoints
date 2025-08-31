@@ -19,7 +19,7 @@ For detailed information on usage and features, consult the **[user/dev guide](h
 ## Installation
 
 ### Prerequisites
-This version uses the same prerequisites as the opoen source version. For detailed info, consult [OSIRIS QUICKSTART](https://osiris-code.github.io/quickstart/#0-prerequisites).
+This version uses the same prerequisites as the opon source version. For detailed info, consult [OSIRIS QUICKSTART](https://osiris-code.github.io/quickstart/#0-prerequisites).
 
 An overview is as follows:
 - Suitable Compilers: `gfortran` ; `gcc` ; `make` 

@@ -651,9 +651,28 @@ Take into account:
 >- AI tool implementation (?)
 >- Further paramether handling
 
-**Note to the developer:**
+**A note from a previous developer:**
 
-Thank you for reading this not so professional guide. This code was developed by a physics undergrad as a final project along with other pieces of software. It was a bit rushed and it left many doors open for bugs. Altough my time in the project is finished, support will always be granted. If you need it, pls cc my supervisors. 
+Congratulations! You've just inherited a piece of code developed with equal parts passion, physics, and panic. 
+
+Think of this less as "not so professional" and more as "artisanal, hand-crafted code with character." It was built by a physics undergrad (me!) running on caffeine and cosmic radiation during finals season. It works… mostly. It's like a quantum state: both functioning and full of surprises until observed.
+
+Yes, I left a few doors open for bugs. Consider them… features waiting to be discovered. 
+
+My time at the helm is over, but I leave you with this wisdom:
+
+- The comments are your friends (especially the ones that look like !*! or !^! – they're my cryptic breadcrumbs).
+
+- When in doubt, try turning it off and on again. (Just kidding. Mostly.)
+
+- And remember: my brilliant supervisors are just an email away. If you find something particularly eldritch, please do cc them—they're the real wizards here.
+
+This code may have been rushed, but it was made with love (and maybe a few tears). I’m excited to see where you take it!
+
+Happy coding—and may the runtime be ever in your favor.
+
+Cheers,
+The sleep-deprived physics undergrad who probably should’ve commented more 😄
 
 # Support & Contact
 
