@@ -24,14 +24,10 @@
 - [3. Moving Window](#3-moving-window)
 - [4. Automatic Restart](#4-automatic-restart)
 - [5. Developer Guide](#5-developer-guide)
-  - [5.1 Core Modules](#51-core-modules)
-  - [5.2 Key Functions](#52-key-functions)
-  - [5.3 Data Structures](#53-data-structures)
-  - [5.4 Limitations](#54-limitations)
-  - [5.5 Future Development](#55-future-development)
-- [Appendix: Fortran Modules](#appendix-fortran-modules)
-  - [os-workflow.f03](#os-workflowf03)
-  - [os-workflow_reader.f03](#os-workflow_readerf03)
+  - [5.1 Reading file](#51-reading-file)
+  - [5.2 Executing file](#52-executing-file)
+  - [5.3 Limitations](#53-limitations)
+  - [5.4 Future Development](#54-future-development)
 - [Support & Contact](#support--contact)
 
 ---
@@ -259,7 +255,7 @@ There are two main files in the steering module.
 
 This file is responsible for all parsing functions as well as reading the input deck. 
 
-**Procedures:**
+**Core Procedures:**
 
 ```fortran
  subroutine read_steering_file(no_co, file_content, iostat)
@@ -435,11 +431,6 @@ This file is responsible for all parsing functions as well as reading the input 
 
 ## 5.2 Executing file 
 
-This file is responsible for executing changes to variables and processing commands. It is the main steering file. 
-
-**Procedures:**
-## 5.2 Executing file
-
 This file contains the logic for applying steering commands to the simulation. It interprets parsed key-value pairs and modifies simulation state accordingly.
 
 **Core Procedures:**
@@ -447,160 +438,251 @@ This file contains the logic for applying steering commands to the simulation. I
 ```fortran
  subroutine set_workflow_step(step, sim)
 ```
-  Documentation placeholder for `set_workflow_step`.
+  Set workflow step procedure.
+
+  - `step` → `integer, intent(in)`
+  - `sim` → `class(t_simulation), intent(inout)`
 
 ---
 
 ```fortran
  subroutine check_file_exists(filename, file_exists, file_size, file_content)
 ```
-  Documentation placeholder for `check_file_exists`.
+  Check file exists procedure.
+
+  - `filename` → `character(len=*), intent(in)`
+  - `file_exists` → `logical, intent(out)`
+  - `file_size` → `integer, intent(out)`
+  - `file_content` → `character(:), allocatable, intent(out)`
 
 ---
 
 ```fortran
  subroutine rename_file(old_name, new_name, success)
 ```
-  Documentation placeholder for `rename_file`.
+  Rename file procedure.
+
+  - `old_name` → `character(len=*), intent(in)`
+  - `new_name` → `character(len=*), intent(in)`
+  - `success` → `logical, intent(out)`
 
 ---
 
 ```fortran
  subroutine check_workflow_step(file_ok, sim, no_co, steering_exit)
 ```
-  Documentation placeholder for `check_workflow_step`.
+  Check workflow step procedure.
+
+  - `file_ok` → `logical, intent(out)`
+  - `sim` → `type(t_simulation), intent(inout)`
+  - `no_co` → `type(t_node_conf), intent(in)`
+  - `steering_exit` → `logical, intent(out)`
 
 ---
 
 ```fortran
  subroutine check_and_execute(sim, steering_exit)
 ```
-  Documentation placeholder for `check_and_execute`.
+  Check and execute procedure.
+
+  - `sim` → `class(t_simulation), intent(inout)`
+  - `steering_exit` → `logical, intent(out)`
 
 ---
 
 ```fortran
  subroutine steering_emf_diag(sim, report_spec, command_name, new_value, ierr)
 ```
-  Documentation placeholder for `steering_emf_diag`.
+  Steering emf diag procedure.
+
+  - `sim` → `class(t_simulation), intent(inout)`
+  - `report_spec` → `character(*), intent(in)`
+  - `command_name` → `character(*), intent(in)`
+  - `new_value` → `integer, dimension(:), intent(in)`
+  - `ierr` → `integer, intent(out)`
 
 ---
 
 ```fortran
  subroutine add_emf_report(sim, input_string)
 ```
-  Documentation placeholder for `add_emf_report`.
+  Add emf report procedure.
+
+  - `sim` → `class(t_simulation), intent(inout)`
+  - `input_string` → `character(len=*), intent(in)`
 
 ---
 
 ```fortran
  subroutine steering_current_diag(sim, report_spec, command_name, new_value, ierr)
 ```
-  Documentation placeholder for `steering_current_diag`.
+  Steering current diag procedure.
+
+  - `sim` → `class(t_simulation), intent(inout)`
+  - `report_spec` → `character(*), intent(in)`
+  - `command_name` → `character(*), intent(in)`
+  - `new_value` → `integer, dimension(:), intent(in)`
+  - `ierr` → `integer, intent(out)`
 
 ---
 
 ```fortran
  subroutine add_current_report(sim, input_string)
 ```
-  Documentation placeholder for `add_current_report`.
+  Add current report procedure.
+
+  - `sim` → `class(t_simulation), intent(inout)`
+  - `input_string` → `character(len=*), intent(in)`
 
 ---
 
 ```fortran
  subroutine steering_neutral_diag(sim, report_spec, particle_name, command_name, new_value, ierr)
 ```
-  Documentation placeholder for `steering_neutral_diag`.
+  Steering neutral diag procedure.
+
+  - `sim` → `class(t_simulation), intent(inout)`
+  - `report_spec` → `character(*), intent(in)`
+  - `particle_name` → `character(*), intent(in)`
+  - `command_name` → `character(*), intent(in)`
+  - `new_value` → `integer, dimension(:), intent(in)`
+  - `ierr` → `integer, intent(out)`
 
 ---
 
 ```fortran
  subroutine add_neutral_report(sim, input_string, particle_name)
 ```
-  Documentation placeholder for `add_neutral_report`.
+  Add neutral report procedure.
+
+  - `sim` → `class(t_simulation), intent(inout)`
+  - `input_string` → `character(len=*), intent(in)`
+  - `particle_name` → `character(*), intent(in)`
 
 ---
 
 ```fortran
  subroutine steering_species_diag(sim, report_spec, particle_name, command_name, new_value, averaged_quant, ierr)
 ```
-  Documentation placeholder for `steering_species_diag`.
+  Steering species diag procedure.
+
+  - `sim` → `class(t_simulation), intent(inout)`
+  - `report_spec` → `character(*), intent(in)`
+  - `particle_name` → `character(*), intent(in)`
+  - `command_name` → `character(*), intent(in)`
+  - `new_value` → `integer, dimension(:), intent(in)`
+  - `averaged_quant` → `logical, intent(in)`
+  - `ierr` → `integer, intent(out)`
 
 ---
 
 ```fortran
  subroutine add_species_report(sim, input_string, name, averaged_quant)
 ```
-  Documentation placeholder for `add_species_report`.
+  Add species report procedure.
+
+  - `sim` → `class(t_simulation), intent(inout)`
+  - `input_string` → `character(len=*), intent(in)`
+  - `name` → `character(len=*), intent(in)`
+  - `averaged_quant` → `logical, intent(in)`
 
 ---
 
 ```fortran
  subroutine steering_particles_diag(sim, report_spec, command_name, new_value, ierr)
 ```
-  Documentation placeholder for `steering_particles_diag`.
+  Steering particles diag procedure.
+
+  - `sim` → `class(t_simulation), intent(inout)`
+  - `report_spec` → `character(*), intent(in)`
+  - `command_name` → `character(*), intent(in)`
+  - `new_value` → `integer, dimension(:), intent(in)`
+  - `ierr` → `integer, intent(out)`
 
 ---
 
 ```fortran
  subroutine add_particles_report()
 ```
-  Documentation placeholder for `add_particles_report`.
+  Add particles report procedure.
+
 
 ---
 
 ```fortran
  subroutine parse_report_spec(report_spec, quant, details, item_type, direction, gipos, is_tavg)
 ```
-  Documentation placeholder for `parse_report_spec`.
+  Parse report spec procedure.
+
+  - `report_spec` → `character(*), intent(in)`
+  - `quant` → `character(:), allocatable, intent(out)`
+  - `details` → `character(:), allocatable, intent(out)`
+  - `item_type` → `integer, intent(out)`
+  - `direction` → `integer, intent(out)`
+  - `gipos` → `integer, dimension(2), intent(out)`
+  - `is_tavg` → `logical, intent(out)`
 
 ---
 
 ```fortran
  subroutine valid_report_add(sim, identifier, diag_command, report, ierr)
 ```
-  Documentation placeholder for `valid_report_add`.
+  Valid report add procedure.
+
+  - `sim` → `class(t_simulation), intent(inout)`
+  - `identifier` → `character(len=*), intent(in)`
+  - `diag_command` → `character(len=*), intent(in)`
+  - `report` → `type(t_vdf_report), pointer, intent(inout)`
+  - `ierr` → `integer, intent(out)`
 
 ---
 
 ```fortran
- subroutine write_restart( sim )
+ subroutine write_restart(sim)
 ```
-  Documentation placeholder for `write_restart`.
+  Write restart procedure.
+
+  - `sim` → `class ( t_simulation ), intent(inout)`
 
 ---
 
 ```fortran
  subroutine set_max_time(sim, val, ierr)
 ```
-  Documentation placeholder for `set_max_time`.
+  Set max time procedure.
+
+  - `sim` → `class(t_simulation), intent(inout)`
+  - `val` → `character(len=*), intent(in)`
+  - `ierr` → `integer, intent(out)`
 
 ---
 
 ```fortran
  subroutine set_omega_p0(sim, val, ierr)
 ```
-  Documentation placeholder for `set_omega_p0`.
+  Set omega p0 procedure.
+
+  - `sim` → `class(t_simulation), intent(inout)`
+  - `val` → `character(len=*), intent(in)`
+  - `ierr` → `integer, intent(out)`
 
 ---
 
 ```fortran
  subroutine set_species_math_func(sim, name, math_function, ierr)
 ```
-  Documentation placeholder for `set_species_math_func`.
+  Set species math func procedure.
+
+  - `sim` → `class(t_simulation), intent(inout)`
+  - `name` → `character(len=*), intent(in)`
+  - `math_function` → `character(len=*), intent(in)`
+  - `ierr` → `integer, intent(out)`
 
 ---
 
-```fortran
- function character(len=*)
-```
-  Documentation placeholder for `character`.
-
----
 
 
-
-##  5.4 Limitations
+##  5.3 Limitations
 
 As this code is stil a proof of concept, many features are incomplete due to time limitations, these include:
 
@@ -640,7 +722,7 @@ Take into account:
 >- For code specificity, contact luis.nobrega@tecnico.ulisboa.pt, for questions about what is physically acceptable, thales.silva@tecnico.ulisboa.pt and for OSIRIS insight, ricardo.fonseca@iscte-iul.pt
 >- Good luck, you will need it.
 
-## 5.5 Future Development
+## 5.4 Future Development
 
 **Enhancements:**
 
@@ -651,7 +733,7 @@ Take into account:
 >- AI tool implementation (?)
 >- Further paramether handling
 
-**A note from a previous developer:**
+<span style="color:magenta">**A note from a previous developer:**</span>
 
 Congratulations! You've just inherited a piece of code developed with equal parts passion, physics, and panic. 
 
@@ -672,7 +754,7 @@ This code may have been rushed, but it was made with love (and maybe a few tears
 Happy coding—and may the runtime be ever in your favor.
 
 Cheers,
-The sleep-deprived physics undergrad who probably should’ve commented more 😄
+The sleep-deprived physics undergrad who probably should’ve commented more 😄.
 
 # Support & Contact
 
