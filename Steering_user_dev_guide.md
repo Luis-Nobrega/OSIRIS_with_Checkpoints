@@ -208,15 +208,101 @@ Case by case examples are shown below:
 
 ### 2.3.1 Current and EMF
 
-!!! UNDER DEVELOPMENT !!!
+Note that for **now**, having the `+` sign is completely irrelevant for all diagnostics for now (Sept/25).
+
+If you are testing the software, there is a useful script `cleaner.sh` that empties the data folders and renames the steering file.
+
+**Changing paramether of pre-existing report**
+
+If your report, say `b1` was already pre-declared, to change a paramether just reference it in `steering_input_deck` as follows:
+
+```fortran
+diag_emf_1 = [test_name+; b1; ndump_fac; 3]
+```
+
+**Adding simple report**
+
+If your report, say `b1` was **NOT** already pre declared, to change a paramether, just add it, and define `ndump_fac`:
+
+```fortran
+diag_emf_1 = [test_name+; b3; ndump_fac; 3]
+```
+
+**Adding report with tavg if basic report exists**
+
+If your report, say `b1` was already pre-declared, and you want to declare the `b1-tavg` variant, you **MUST** define the `n_tavg` argument first or the simulation will crash. 
+
+```fortran
+diag_emf_2 = [test_name+; b1, tavg; n_tavg; 2]
+```
+
+Remember that `tavg` frequency is set by `ndump_fac`. So set it or else nothing will be outputed. In doubt declare both as changing `ndump_fac` only affects the specific report you are targeting. 
+
+**Adding report with tavg from scratch**
+
+If your report, say `b1` was **NOT** already pre declared, then it is **MANDATORY** to declare both `ndump_fac` and `n_tavg`.
+
+```fortran
+diag_emf_1 = [test_name+; b1, tavg; ndump_fac; 5]
+diag_emf_2 = [test_name+; b1, tavg; n_tavg; 2]
+```
+
+The declaration order is irrelevant.
+
+**Adding report with savg if basic report exists**
+
+If your report, say `b1` was already pre declared, and you want to declare the `b1-savg` variant, you **MUST** define the `n_ave` argument first or the simulation will crash. 
+
+```fortran
+diag_emf_1 = [test_name+; b1, savg; n_ave; 2; 2]
+```
+
+Make sure `ndump_fac` was previously defined. If unsure, define it.
+
+```fortran
+diag_emf_2 = [test_name+; b1, savg; ndump_fac; 3]
+```
+
+**Adding report with savg from scratch**
+
+If your report, say `b1` was **NOT** already pre-declared, then it is **MANDATORY** to declare both `ndump_fac` and `n_ave`.
+
+```fortran
+diag_emf_1 = [test_name+; b1, savg; ndump_fac; 3]>diag_emf_2 = [test_name+; b1, savg; n_ave; 2; 2]
+```
+
+**Adding report with savg-tavg**
+
+Adding `b1-savg-tavg` reports is trickier. Please always define the following 3 quantities or else the simulation mith stall.
+
+``` fortran 
+diag_emf_1 = [test_name+; b1, tavg, savg; ndump_fac_ave; 3]
+diag_emf_2 = [test_name+; b1, tavg, savg; n_tavg; 2]
+diag_emf_3 = [test_name+; b1, tavg, savg; n_ave; 2; 2]
+```
+**Adding line reports** 
+
+Adding line reports is the same as declaring them in the namelist.
+
+``` fortran 
+diag_emf_9 = [test_name+; e2, line, x2, 32; ndump_fac_lineout; 3]
+```
 
 ### 2.3.2 Neutrals
 
-!!! UNDER DEVELOPMENT !!!
+This module doesn't allow for creating new neutrals, only new diagnostics 
+
+The processes are the same as before, always check for space or time average dependencies as described in [2.3.1 Current and EMF](#231-current-and-emf), before submitting a command.
+
 
 ### 2.3.3 Species
 
-!!! UNDER DEVELOPMENT !!!
+This module doesn't allow for creating new species, only new diagnostics 
+
+The processes are the same as before, always check for space or time average dependencies as described in [2.3.1 Current and EMF](#231-current-and-emf), before submitting a command. 
+
+
+<span style="color:red">**WARNING:**</span>: As of right now, it isn't possible to add new reports to the species, only to change the pre-existing ones - this feature will be fixed soon. 
 
 # 3. Moving Window
 

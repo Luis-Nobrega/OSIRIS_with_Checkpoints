@@ -41,10 +41,11 @@ emf_bound {
 diag_emf {
   ndump_fac = 5,                     ! diagnostics at every 10 * 5 = 50 timesteps
   reports = "b2, savg",          ! save all magnetic field components
-	    "e1, line, x2, 32", 
+	    "e1, line, x2, 32",
+!	    "b1",    
   n_ave(1:2) = 1,2,
   ndump_fac_ave = 2,
-  n_tavg = 2,
+  !n_tavg = 2,
   ndump_fac_lineout = 5,
   }
 
@@ -98,8 +99,8 @@ diag_species {
 }
 
 neutral {
-  name = "Neutral",
-  neutral_gas = "C",
+ name = "Neutral",
+ neutral_gas = "C",
 }
 
 diag_neutral
